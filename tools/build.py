@@ -4,6 +4,7 @@ import json
 from collections import Counter
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
+from fractions import Fraction
 from hashlib import sha256
 from html import escape
 from pathlib import Path
@@ -113,12 +114,32 @@ def parse_gemini(data):
                 m['goal'], m['quality'], 'not reported') for m in value['models']]
 
 
+def metric_fraction(value, scored):
+    """Read the exact scored-case fraction; display percentages never sort rows."""
+    scored_match = re.fullmatch(r'(\d+)/44', scored)
+    match = re.fullmatch(r'(\d+)/(\d+) \((\d+\.\d)%\)', value)
+    if not scored_match or not match:
+        raise ValueError('Invalid scored fraction or metric')
+    num, den = int(match[1]), int(match[2])
+    if not 0 < den <= 44 or den != int(scored_match[1]) or not 0 <= num <= den:
+        raise ValueError('Invalid metric denominator or numerator')
+    percent = (Decimal(num) * 100 / den).quantize(Decimal('.1'), rounding=ROUND_HALF_UP)
+    if percent != Decimal(match[3]):
+        raise ValueError('Invalid percentage arithmetic')
+    return Fraction(num, den)
+
+
+def quality_order(row):
+    return (-metric_fraction(row.quality, row.scored),
+            -metric_fraction(row.goal, row.scored), row.model.casefold(), row.model)
+
+
 def all_rows():
     rows = parse((ROOT / 'source/MODEL_RESULTS.md').read_bytes()) + parse_gemini(
         (ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes())
     if len(rows) != 21 or len({r.model for r in rows}) != 21:
         raise ValueError('Duplicate or missing model')
-    return sorted(rows, key=lambda row: (row.model.casefold(), row.model))
+    return sorted(rows, key=quality_order)
 
 
 def render_row(row):
@@ -133,7 +154,7 @@ def render_row(row):
 
 
 def render(rows):
-    table = '<div class="results-table"><table aria-describedby="comparison gemini-context"><caption>21 model observations · alphabetical by exact model ID</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Source / run</th><th scope="col">Scored / assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col">All quality checks</th><th scope="col">Est. USD</th></tr></thead><tbody>' + ''.join(map(render_row, sorted(rows, key=lambda row: (row.model.casefold(), row.model)))) + '</tbody></table></div>'
+    table = '<div class="results-table"><table aria-describedby="comparison gemini-context"><caption>21 models · sorted by strict quality ↓</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Source / run</th><th scope="col">Scored / assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col" aria-sort="descending">All quality checks ↓</th><th scope="col">Est. USD</th></tr></thead><tbody>' + ''.join(map(render_row, sorted(rows, key=quality_order))) + '</tbody></table></div>'
     template = (ROOT / 'tools/template.html').read_text()
     return template.replace('{{DOC}}', DOC).replace('{{SHA}}', SHA).replace('{{UPSTREAM}}', UPSTREAM).replace('{{RESULTS}}', table)
 

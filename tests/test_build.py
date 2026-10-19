@@ -2,6 +2,7 @@ import dataclasses
 import json
 import re
 from decimal import Decimal, ROUND_HALF_UP
+from fractions import Fraction
 from hashlib import sha256
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
@@ -30,28 +31,28 @@ muse-wonder-1.0|43|1|27|12|33
 muse-spark-1.3|44|0|18|4|11'''
 
 
-# Independently pinned human-alphabetical order of the 21 exact model IDs.
-EXPECTED_MODEL_ORDER = '''claude-fable-5-1
-claude-opus-5-5
-deepseek-ai/DeepSeek-V4-Flash-0731
-deepseek-ai/DeepSeek-V4.1-Flash
-gemini-3.8-flash
-gemini-4-argon
+# Independent expected order, transcribed from the observed fractions and tie rules.
+EXPECTED_MODEL_ORDER = """gemini-4-argon
 gpt-6-astra
-gpt-6-luna
-gpt-6-sol
 gpt-6.1-sol
-mistral-medium-3-5
-muse-spark-1.3
+claude-fable-5-1
+claude-opus-5-5
+gemini-3.8-flash
+gpt-6-sol
 muse-wonder-1.0
 nvidia/GLM-5.2-NVFP4-262K
-nvidia/Kimi-K2.6-NVFP4
-nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
-Qwen/Qwen3.5-397B-A17B-FP8
-Qwen/Qwen3.5-9B
-Qwen/Qwen3.6-35B-A3B-FP8
+zai-org/GLM-5.3-Flash
+muse-spark-1.3
+deepseek-ai/DeepSeek-V4-Flash-0731
 Qwen/Qwen3.8-27B-FP8
-zai-org/GLM-5.3-Flash'''.splitlines()
+gpt-6-luna
+deepseek-ai/DeepSeek-V4.1-Flash
+Qwen/Qwen3.6-35B-A3B-FP8
+nvidia/Kimi-K2.6-NVFP4
+Qwen/Qwen3.5-397B-A17B-FP8
+mistral-medium-3-5
+nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
+Qwen/Qwen3.5-9B""".splitlines()
 
 class Document(HTMLParser):
     def __init__(self):
@@ -134,7 +135,7 @@ class BuildTests(unittest.TestCase):
         doc = Document()
         doc.feed(html)
         self.assertEqual(doc.models, EXPECTED_MODEL_ORDER)
-        for text in ('not an official benchmark leaderboard', 'not independent semantic tasks', 'No independent human semantic validation yet', 'Estimates are not invoices', 'Alphabetical order is not a quality ranking', 'production predictiveness', 'official Lifecycle results', 'Prospire Technologies Ltd', 'CC BY 4.0', 'Apache-2.0'):
+        for text in ('not an official leaderboard or validated general-capability ranking', 'not independent semantic tasks', 'No independent human semantic validation yet', 'Estimates are not invoices', 'observed strict quality pass rate among scored cases', 'Prospire Technologies Ltd', 'CC BY 4.0', 'Apache-2.0'):
             self.assertIn(text, html)
         self.assertEqual(doc.tags.count('table'), 1)
         self.assertEqual(len(doc.models), 21)
@@ -157,6 +158,120 @@ class BuildTests(unittest.TestCase):
         doc = Document()
         doc.feed(build.render(rows))
         self.assertEqual(doc.models, ['ALPHA', 'Alpha', 'alpha', 'Beta', 'beta'])
+
+    def test_exact_fraction_inputs(self):
+        for value, scored, expected in (
+            ('42/44 (95.5%)', '44/44', Fraction(21, 22)),
+            ('44/44 (100.0%)', '44/44', Fraction(1)),
+            ('1/44 (2.3%)', '44/44', Fraction(1, 44)),
+            ('0/40 (0.0%)', '40/44', Fraction(0)),
+            ('20/43 (46.5%)', '43/44', Fraction(20, 43)),
+            ('35/43 (81.4%)', '43/44', Fraction(35, 43)),
+        ):
+            with self.subTest(value=value):
+                result = build.metric_fraction(value, scored)
+                self.assertIsInstance(result, Fraction)
+                self.assertEqual(result, expected)
+        for value, scored in (
+            ('1/0 (0.0%)', '0/44'), ('45/44 (102.3%)', '44/44'),
+            ('-1/44 (0.0%)', '44/44'), ('20/43 (46.5%)', '44/44'),
+            ('20/43 (46.6%)', '43/44'), ('1/44', '44/44'),
+            ('1.0/44 (2.3%)', '44/44'), ('0/45 (0.0%)', '45/44'),
+            ('1/44 (2.3%) extra', '44/44'), ('1/44 (2.3%)', '44/45'),
+        ):
+            with self.subTest(value=value, scored=scored), self.assertRaises(ValueError):
+                build.metric_fraction(value, scored)
+
+    def test_fraction_sort_ignores_numerator_and_rounded_display(self):
+        base = self.rows[0]
+        rows = [dataclasses.replace(base, model=model, scored=scored,
+                                   goal=goal, quality=quality)
+                for model, scored, goal, quality in (
+                    ('a', '44/44', '44/44 (100.0%)', '0/44 (0.0%)'),
+                    ('z', '43/44', '43/43 (100.0%)', '0/43 (0.0%)'),
+                    ('b', '44/44', '44/44 (100.0%)', '20/44 (45.5%)'),
+                    ('c', '43/44', '43/43 (100.0%)', '20/43 (46.5%)'),
+                )]
+        doc = Document()
+        doc.feed(build.render(rows))
+        self.assertEqual(doc.models, ['c', 'b', 'a', 'z'])
+
+    def test_results_intro_markup(self):
+        class ResultsIntro(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.stack = []
+                self.errors = []
+                self.direct_paragraphs = []
+                self.count = 0
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if not self.stack:
+                    if 'results-intro' not in attrs.get('class', '').split():
+                        return
+                    self.count += 1
+                elif len(self.stack) == 1 and tag == 'p':
+                    self.direct_paragraphs.append(attrs.get('id'))
+                self.stack.append(tag)
+
+            def handle_endtag(self, tag):
+                if self.stack:
+                    if self.stack[-1] != tag:
+                        self.errors.append((self.stack[-1], tag))
+                    else:
+                        self.stack.pop()
+
+        for name, html in (
+            ('template', (build.ROOT / 'tools/template.html').read_text()),
+            ('rendered', build.render(self.rows)),
+            ('site', (build.ROOT / 'site/index.html').read_text()),
+        ):
+            with self.subTest(document=name):
+                self.assertNotRegex(html, r'</p>\s*</p>')
+                intro = ResultsIntro()
+                intro.feed(html)
+                self.assertEqual(intro.count, 1)
+                self.assertEqual(intro.errors, [])
+                self.assertEqual(intro.stack, [])
+                self.assertEqual(intro.direct_paragraphs, ['comparison'])
+
+    def test_order_copy_and_sort_indicator(self):
+        html = build.render(self.rows)
+        self.assertIn('<th scope="col" aria-sort="descending">All quality checks ↓</th>', html)
+        caption = re.search(r'<caption>(.*?)</caption>', html).group(1)
+        self.assertEqual(caption, '21 models · sorted by strict quality ↓')
+        self.assertLessEqual(len(caption.split()), 12)
+        comparison = re.search(r'<p id="comparison">(.*?)</p>', html).group(1)
+        self.assertLessEqual(len(comparison.split()), 45)
+        for claim in ('strict quality pass/scored fraction descending',
+                      'goal completion fraction descending', 'compared exactly',
+                      'Different runs/settings and historical behavior mappings',
+                      'incomparable for a validated cross-series capability ranking'):
+            self.assertIn(claim, comparison)
+        self.assertNotIn('not an official', comparison + caption)
+        hero = re.search(r'<p class="hero-copy">(.*?)</p>', html).group(1)
+        self.assertIn('not an official leaderboard or validated general-capability ranking', hero)
+        doc = Document()
+        doc.feed(html)
+        self.assertIn(('table', {'aria-describedby': 'comparison gemini-context'}), doc.attributes)
+        readme = (build.ROOT / 'README.md').read_text()
+        for claim in ('observed strict quality pass rate among scored cases',
+                      'goal achieved fraction descending',
+                      'case-insensitive exact model ID ascending, then exact model ID ascending',
+                      'exact rational arithmetic',
+                      'controlled cross-series capability ranking'):
+            self.assertIn(claim, ' '.join(readme.split()))
+        for text in (html, readme):
+            for stale in ('alphabetical', 'not a ranking', 'not a quality ranking'):
+                self.assertNotIn(stale, text.lower())
+
+    def test_source_bytes_unchanged(self):
+        self.assertEqual(sha256(self.data).hexdigest(),
+                         'e0774775be2e2897f7cbaefc8a0acd24ecf4900e1114c2513ae2e66f04c2141f')
+        gemini = (build.ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes()
+        self.assertEqual(sha256(gemini).hexdigest(), '9f0e424c631886690902f9286b33390cd20832129ac3f92f0578edbeab2e2aae')
+        self.assertEqual(build.outputs()['GEMINI_AGGREGATES.json'], gemini)
 
     def test_about_project_scope_and_pinned_sources(self):
         html = build.render(self.rows)
@@ -232,6 +347,17 @@ class BuildTests(unittest.TestCase):
         self.assertIn('<a href="./LICENSE-DATA">license text</a>', footer)
         self.assertIn('Site code: Apache-2.0', footer)
         self.assertNotIn('from the original', footer)
+
+    def test_strict_quality_column_emphasis(self):
+        css = (build.ROOT / 'tools/style.css').read_text()
+        self.assertIn('td:nth-child(6){color:var(--accent);font-weight:650}', css)
+        self.assertNotRegex(css, r'td:nth-child\(5\)\s*\{')
+        doc = Document()
+        doc.feed(build.render_row(self.rows[0]))
+        cells = [(tag, attrs) for tag, attrs in doc.attributes
+                 if tag in ('th', 'td')]
+        self.assertEqual(cells[4][1]['data-label'], 'Goal achieved')
+        self.assertEqual(cells[5][1]['data-label'], 'All quality checks')
 
     def test_seven_column_model_width_has_no_tablet_override(self):
         css = (build.ROOT / 'tools/style.css').read_text()

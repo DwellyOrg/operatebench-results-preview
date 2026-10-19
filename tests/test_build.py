@@ -196,6 +196,46 @@ class BuildTests(unittest.TestCase):
         doc.feed(build.render(rows))
         self.assertEqual(doc.models, ['c', 'b', 'a', 'z'])
 
+    def test_results_intro_markup(self):
+        class ResultsIntro(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.stack = []
+                self.errors = []
+                self.direct_paragraphs = []
+                self.count = 0
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if not self.stack:
+                    if 'results-intro' not in attrs.get('class', '').split():
+                        return
+                    self.count += 1
+                elif len(self.stack) == 1 and tag == 'p':
+                    self.direct_paragraphs.append(attrs.get('id'))
+                self.stack.append(tag)
+
+            def handle_endtag(self, tag):
+                if self.stack:
+                    if self.stack[-1] != tag:
+                        self.errors.append((self.stack[-1], tag))
+                    else:
+                        self.stack.pop()
+
+        for name, html in (
+            ('template', (build.ROOT / 'tools/template.html').read_text()),
+            ('rendered', build.render(self.rows)),
+            ('site', (build.ROOT / 'site/index.html').read_text()),
+        ):
+            with self.subTest(document=name):
+                self.assertNotRegex(html, r'</p>\s*</p>')
+                intro = ResultsIntro()
+                intro.feed(html)
+                self.assertEqual(intro.count, 1)
+                self.assertEqual(intro.errors, [])
+                self.assertEqual(intro.stack, [])
+                self.assertEqual(intro.direct_paragraphs, ['comparison'])
+
     def test_order_copy_and_sort_indicator(self):
         html = build.render(self.rows)
         self.assertIn('<th scope="col" aria-sort="descending">All quality checks ↓</th>', html)

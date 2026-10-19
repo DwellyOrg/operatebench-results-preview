@@ -1,5 +1,6 @@
 import dataclasses
 import json
+import re
 from decimal import Decimal, ROUND_HALF_UP
 from hashlib import sha256
 import xml.etree.ElementTree as ET
@@ -212,6 +213,35 @@ class BuildTests(unittest.TestCase):
         for key in ('baseline', 'meta'):
             url = next(url for cohort, title, url in build.SERIES.values() if cohort == key)
             self.assertIn(f'href="{url}"', html)
+
+    def test_sol_visible_missing_run_commit_disclosure(self):
+        row = next(row for row in self.rows if row.model == 'gpt-6.1-sol')
+        doc = Document()
+        doc.feed(build.render_row(row))
+        self.assertEqual(doc.urls, [build.DOC])
+        self.assertIn(f'<a href="{build.DOC}">Table · no run commit</a>',
+                      build.render_row(row))
+        self.assertIn('“Table · no run commit”', (build.ROOT / 'README.md').read_text())
+
+    def test_footer_dual_provenance_and_attribution(self):
+        footer = build.render(self.rows).split('<footer>', 1)[1].split('</footer>', 1)[0]
+        self.assertIn(f'<a href="{build.DOC}">pinned public OperateBench table (19 rows)</a>', footer)
+        self.assertIn('<a href="./GEMINI_AGGREGATES.json">owner-authorized sanitized Gemini aggregates (2 rows)</a>', footer)
+        self.assertIn('owned by Prospire Technologies Ltd', footer)
+        self.assertIn('<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>', footer)
+        self.assertIn('<a href="./LICENSE-DATA">license text</a>', footer)
+        self.assertIn('Site code: Apache-2.0', footer)
+        self.assertNotIn('from the original', footer)
+
+    def test_seven_column_model_width_has_no_tablet_override(self):
+        css = (build.ROOT / 'tools/style.css').read_text()
+        # One deliberate width for desktop/tablet; mobile still uses auto!important.
+        rules = re.findall(r'th:first-child\s*\{([^}]+)\}', css)
+        widths = [match.group(1) for rule in rules
+                  for match in re.finditer(r'(?:^|;)\s*width\s*:\s*([^;]+)', rule)]
+        self.assertEqual(widths, ['27%'])
+        tablet = css.split('@media(max-width:1000px){', 1)[1].split('@media(max-width:720px)', 1)[0]
+        self.assertIn('th:first-child{padding-left:16px}', tablet)
 
     def test_unified_figures_and_sources(self):
         expected = EXPECTED + '\ngemini-4-argon|44|0|44|42|not reported\ngemini-3.8-flash|43|1|43|20|not reported'

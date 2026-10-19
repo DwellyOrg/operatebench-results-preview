@@ -54,8 +54,8 @@ is present in the table, so none is inferred. No aggregate metrics are generated
 Unscored exclusions/aborts must reconcile with assigned minus scored cases.
 
 The baseline and Meta commit links are retained exactly as supplied by the table.
-The Sol6.1 row has no individual commit link in that source; the page says so and
-links to the exact table instead. No missing provenance is invented.
+The Sol6.1 row has no individual commit link in that source; the visible source link reads
+“Table · no run commit” and links to the exact pinned public table instead. No missing provenance is invented.
 
 `tools/build.py` parses the snapshot and renders `tools/template.html` plus
 `tools/style.css` and the local `tools/favicon.svg` into `site/`. The 19 public rows are parsed separately from the pinned markdown; two Gemini rows

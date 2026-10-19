@@ -122,7 +122,7 @@ def all_rows():
 
 
 def render_row(row):
-    short_labels = {'baseline': 'Baseline', 'sol': 'Additional Sol', 'meta': 'Meta'}
+    short_labels = {'baseline': 'Baseline', 'sol': 'Table · no run commit', 'meta': 'Meta'}
     labels_by_run = {key: (short_labels[key], url) for key, title, url in SERIES.values()}
     labels_by_run['gemini'] = ('Gemini v3 · 2026-10-16 · owner-held audit', '#gemini-context')
     title, url = labels_by_run[row.cohort]

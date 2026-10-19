@@ -2,11 +2,16 @@
 
 A standalone, static English presentation of 21 model observations: 19 previously published rows from
 [OperateBench's pinned public table](https://github.com/DwellyOrg/OperateBench/blob/963c6b265c71a632d9b333b01e0edcb21685d9e3/docs/MODEL_RESULTS.md).
-This is a descriptive preview, not an official leaderboard, capability ranking,
+This is a descriptive preview, not an official leaderboard or validated general-capability ranking,
 production prediction, or official Lifecycle result. Two additional Gemini rows are
 newly owner-authorized sanitized aggregates. All 21 exact IDs appear once in one
-semantic table, alphabetically by exact model ID. Baseline, Additional Sol, Meta
-and Gemini v3 labels identify sources/settings without grouping or ranking.
+semantic table, ordered by observed strict quality pass rate among scored cases
+(all-quality-checks numerator / scored denominator), descending. Ties use goal achieved
+fraction descending, then case-insensitive exact model ID ascending, then exact model ID
+ascending. Sorting uses exact rational arithmetic, never floats or rounded percentages.
+The “All quality checks ↓” column identifies the sort key. Baseline, Additional Sol,
+Meta and Gemini v3 labels identify sources/settings. Different runs/settings and historical
+mappings prevent a controlled cross-series capability ranking.
 
 ## Local build and review
 

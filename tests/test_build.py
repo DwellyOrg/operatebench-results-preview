@@ -254,7 +254,13 @@ class BuildTests(unittest.TestCase):
         self.assertIn('not an official leaderboard or validated general-capability ranking', hero)
         doc = Document()
         doc.feed(html)
-        self.assertIn(('table', {'aria-describedby': 'comparison gemini-context'}), doc.attributes)
+        table_attrs = [attrs for tag, attrs in doc.attributes if tag == 'table']
+        self.assertEqual(len(table_attrs), 1)
+        describedby = table_attrs[0].get('aria-describedby', '').split()
+        self.assertEqual(describedby.count('meta-context'), 1)
+        self.assertEqual(describedby, ['comparison', 'meta-context', 'gemini-context'])
+        for context_id in describedby:
+            self.assertEqual(doc.ids.count(context_id), 1, context_id)
         readme = (build.ROOT / 'README.md').read_text()
         for claim in ('observed strict quality pass rate among scored cases',
                       'goal achieved fraction descending',

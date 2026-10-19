@@ -154,7 +154,7 @@ def render_row(row):
 
 
 def render(rows):
-    table = '<div class="results-table"><table aria-describedby="comparison gemini-context"><caption>21 models · sorted by strict quality ↓</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Source / run</th><th scope="col">Scored / assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col" aria-sort="descending">All quality checks ↓</th><th scope="col">Est. USD</th></tr></thead><tbody>' + ''.join(map(render_row, sorted(rows, key=quality_order))) + '</tbody></table></div>'
+    table = '<div class="results-table"><table aria-describedby="comparison meta-context gemini-context"><caption>21 models · sorted by strict quality ↓</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Source / run</th><th scope="col">Scored / assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col" aria-sort="descending">All quality checks ↓</th><th scope="col">Est. USD</th></tr></thead><tbody>' + ''.join(map(render_row, sorted(rows, key=quality_order))) + '</tbody></table></div>'
     template = (ROOT / 'tools/template.html').read_text()
     return template.replace('{{DOC}}', DOC).replace('{{SHA}}', SHA).replace('{{UPSTREAM}}', UPSTREAM).replace('{{RESULTS}}', table)
 

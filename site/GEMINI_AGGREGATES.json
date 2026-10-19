@@ -1,0 +1,27 @@
+{
+  "series": "Gemini v3 owner-run campaign",
+  "mapping": "historical v3; original-source replay only",
+  "date": "2026-10-16",
+  "models": [
+    {
+      "model": "gemini-4-argon",
+      "assigned": 44,
+      "scored": 44,
+      "excluded": 0,
+      "aborted": 0,
+      "goal": "44/44 (100.0%)",
+      "quality": "42/44 (95.5%)",
+      "cost_usd": null
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "assigned": 44,
+      "scored": 43,
+      "excluded": 1,
+      "aborted": 0,
+      "goal": "43/43 (100.0%)",
+      "quality": "20/43 (46.5%)",
+      "cost_usd": null
+    }
+  ]
+}

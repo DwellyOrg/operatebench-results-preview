@@ -4,7 +4,13 @@ Original OperateBench source and published model results:
 Prospire Technologies Ltd.
 https://github.com/DwellyOrg/OperateBench/blob/963c6b265c71a632d9b333b01e0edcb21685d9e3/docs/MODEL_RESULTS.md
 
-The source/MODEL_RESULTS.md snapshot and its site/ copy are CC BY 4.0.
+19 rows: pinned public source/MODEL_RESULTS.md snapshot and its site/ copy.
+2 Gemini rows: newly owner-authorized sanitized historical v3 aggregates in
+source/GEMINI_AGGREGATES.json and its site/ copy, not the public source table.
+Gemini audit is owner-held/non-public; no public raw evidence, independent human
+validation or provider attestation. Scored is not success; costs not reported.
+These data and the site results content are CC BY 4.0, owned by
+Prospire Technologies Ltd.
 The website changes presentation only; historical results remain unchanged.
 No independent authorship of the original results is claimed.
 Site code is Apache-2.0. See LICENSE and LICENSE-DATA.

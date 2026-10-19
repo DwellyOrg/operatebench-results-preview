@@ -1,0 +1,133 @@
+"""Offline, pinned-source static publisher. Python 3.11+, standard library only."""
+import argparse
+from collections import Counter
+from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
+from hashlib import sha256
+from html import escape
+from pathlib import Path
+import re
+
+ROOT = Path(__file__).resolve().parents[1]
+SHA = '963c6b265c71a632d9b333b01e0edcb21685d9e3'
+DIGEST = 'e0774775be2e2897f7cbaefc8a0acd24ecf4900e1114c2513ae2e66f04c2141f'
+UPSTREAM = 'https://github.com/DwellyOrg/OperateBench'
+DOC = f'{UPSTREAM}/blob/{SHA}/docs/MODEL_RESULTS.md'
+SERIES = {
+    f'[Baseline original campaign]({UPSTREAM}/commit/58b36826894c4306aa3ab)': ('baseline', 'Baseline original campaign', f'{UPSTREAM}/commit/58b36826894c4306aa3ab'),
+    'Additive Sol6.1 run': ('sol', 'Additive Sol6.1 run', DOC),
+    f'[Additive Meta Standard]({UPSTREAM}/commit/c6fb49bf2a3714c094c4)': ('meta', 'Additive Meta Standard', f'{UPSTREAM}/commit/c6fb49bf2a3714c094c4'),
+}
+TITLE = '# Model results — descriptive observations: 44 related synthetic cases per model, one trial per case; separate sources/settings; no independent human review yet; not a general-capability ranking'
+HEADER = '| Model | Series (distinct runs/settings) | Scored / assigned | Unscored (excluded / aborted) | Goal achieved | All quality checks | Estimated cost (USD, not invoice) |'
+SEPARATOR = '| --- | --- | --- | --- | --- | --- | --- |'
+
+@dataclass(frozen=True)
+class Row:
+    model: str
+    cohort: str
+    scored: str
+    unscored: str
+    goal: str
+    quality: str
+    cost: str
+
+
+def parse(data: bytes):
+    lines = data.decode('utf-8').splitlines()
+    if len(lines) != 23 or lines[:4] != [TITLE, '', HEADER, SEPARATOR]:
+        raise ValueError('Unexpected source structure or headings')
+    rows = []
+    for line in lines[4:]:
+        cells = line.split('|')
+        if len(cells) != 9 or cells[0] or cells[-1]:
+            raise ValueError('Unexpected columns')
+        model, series, scored, unscored, goal, quality, cost = [c.strip() for c in cells[1:-1]]
+        if not re.fullmatch(r'`[A-Za-z0-9][A-Za-z0-9./-]*`', model):
+            raise ValueError('Unsafe model ID')
+        if series not in SERIES:
+            raise ValueError('Unknown series or source URL')
+        match = re.fullmatch(r'(\d+)/44', scored)
+        if not match or not 0 < int(match[1]) <= 44:
+            raise ValueError('Invalid scored denominator')
+        n = int(match[1])
+        missing = 0
+        if unscored != '—':
+            match = re.fullmatch(r'([1-9]\d*) (excluded|aborted)', unscored)
+            if not match:
+                raise ValueError('Invalid unscored disposition')
+            missing = int(match[1])
+        if n + missing != 44:
+            raise ValueError('Unscored cases must be separate from scored cases')
+        counts = []
+        for value in (goal, quality):
+            match = re.fullmatch(r'(\d+)/(\d+) \((\d+\.\d)%\)', value)
+            if not match:
+                raise ValueError('Invalid metric')
+            num, den = int(match[1]), int(match[2])
+            if den != n or not 0 <= num <= den:
+                raise ValueError('Invalid metric denominator')
+            percent = (Decimal(num) * 100 / den).quantize(Decimal('.1'), rounding=ROUND_HALF_UP)
+            if percent != Decimal(match[3]):
+                raise ValueError('Invalid percentage arithmetic')
+            counts.append(num)
+        if counts[1] > counts[0] or not re.fullmatch(r'\$[1-9]\d*', cost):
+            raise ValueError('Invalid quality subset or estimated cost')
+        rows.append(Row(model[1:-1], SERIES[series][0], scored, unscored, goal, quality, cost))
+    if len({r.model for r in rows}) != 19 or Counter(r.cohort for r in rows) != {'baseline': 16, 'sol': 1, 'meta': 2}:
+        raise ValueError('Unexpected model census')
+    # Pin all figures, IDs, row order, costs and source bytes, beyond structural checks.
+    if sha256(data).hexdigest() != DIGEST:
+        raise ValueError('Pinned source SHA snapshot drift')
+    return rows
+
+
+def render_row(row):
+    values = (row.scored, row.unscored, row.goal, row.quality, row.cost)
+    labels = ('Scored / assigned', 'Unscored', 'Goal achieved', 'All quality checks', 'Est. USD')
+    return '<tr><th scope="row"><code>' + escape(row.model) + '</code></th>' + ''.join(
+        f'<td data-label="{label}">{escape(value)}</td>' for label, value in zip(labels, values)) + '</tr>'
+
+
+def render(rows):
+    sections = []
+    for i, (key, title, url) in enumerate(SERIES.values(), 1):
+        subset = [r for r in rows if r.cohort == key]
+        note = 'The pinned table does not provide an individual source commit for this run.' if key == 'sol' else 'Source commit linked as published in the pinned table.'
+        source_label = 'Published table' if key == 'sol' else 'Run source'
+        sections.append(f'''<section class="cohort" id="{key}" aria-labelledby="{key}-title">
+<div class="cohort-heading"><div><p class="eyebrow">Series {i:02d} · {len(subset)} {'model' if len(subset) == 1 else 'models'}</p><h2 id="{key}-title">{title}</h2></div><a href="{url}">{source_label} ↗</a></div>
+<p class="series-note">Distinct run/settings. {note}</p>
+<table><caption class="sr-only">{title} results in published source order</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Scored /<br> assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col">All quality checks</th><th scope="col">Est. USD</th></tr></thead><tbody>{''.join(map(render_row, subset))}</tbody></table></section>''')
+    template = (ROOT / 'tools/template.html').read_text()
+    return template.replace('{{DOC}}', DOC).replace('{{SHA}}', SHA).replace('{{UPSTREAM}}', UPSTREAM).replace('{{RESULTS}}', '\n'.join(sections))
+
+
+def outputs():
+    return {'index.html': render(parse((ROOT / 'source/MODEL_RESULTS.md').read_bytes())).encode(),
+            'favicon.svg': (ROOT / 'tools/favicon.svg').read_bytes(),
+            'style.css': (ROOT / 'tools/style.css').read_bytes(),
+            'MODEL_RESULTS.md': (ROOT / 'source/MODEL_RESULTS.md').read_bytes(),
+            'LICENSE-DATA': (ROOT / 'LICENSE-DATA').read_bytes(),
+            '.nojekyll': b''}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check', action='store_true')
+    args = parser.parse_args()
+    files = outputs()
+    site = ROOT / 'site'
+    if args.check:
+        actual = {str(p.relative_to(site)) for p in site.rglob('*') if p.is_file()}
+        if actual != set(files) or any(not (site / name).exists() or (site / name).read_bytes() != data for name, data in files.items()):
+            raise SystemExit('Generated site differs; run python3 tools/build.py')
+        print('OK: pinned snapshot and generated site match (19 models; 16 + 1 + 2).')
+    else:
+        site.mkdir(exist_ok=True)
+        for name, data in files.items():
+            (site / name).write_bytes(data)
+        print('Built site/ from pinned public snapshot (19 models).')
+
+if __name__ == '__main__':
+    main()

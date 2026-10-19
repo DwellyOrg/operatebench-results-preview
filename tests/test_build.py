@@ -397,6 +397,27 @@ class BuildTests(unittest.TestCase):
             self.assertNotIn(text, html)
         self.assertEqual(build.outputs()['MODEL_RESULTS.md'], self.data)
 
+    def test_meta_historical_tool_choice_disclosure(self):
+        html = build.render(self.rows)
+        note = re.search(r'<p id="meta-context">(.*?)</p>', html).group(1)
+        doc = Document()
+        doc.feed(note)
+        pinned = ('https://github.com/DwellyOrg/OperateBench/blob/'
+                  '963c6b265c71a632d9b333b01e0edcb21685d9e3/'
+                  'docs/META_MUSE_SNAPSHOT.md#L104-L113')
+        self.assertEqual(doc.urls, [pinned])
+        for claim in ('Meta Standard uses <code>tool_choice:auto</code> instead of <code>required</code>',
+                      'historical policy</a> excludes one <code>muse-wonder-1.0</code> text-only response with no tool call',
+                      '43/44 scored'):
+            self.assertIn(claim, note)
+        visible_note = re.sub(r'<[^>]+>', '', note)
+        self.assertLessEqual(len(visible_note), 210)
+        for disclaimer in ('cost', 'invoice', 'failure'):
+            self.assertNotIn(disclaimer, visible_note.lower())
+        self.assertLess(html.index('id="results"'), html.index('id="meta-context"'))
+        self.assertLess(html.index('id="meta-context"'), html.index('id="gemini-context"'))
+        self.assertLess(html.index('id="gemini-context"'), html.index('<table'))
+
     def test_concise_gemini_caveat_and_no_replay_claim(self):
         html = build.render(self.rows)
         before, context = html.split('<aside class="aggregate-context"', 1)

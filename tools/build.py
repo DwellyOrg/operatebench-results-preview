@@ -1,5 +1,6 @@
 """Offline, pinned-source static publisher. Python 3.11+, standard library only."""
 import argparse
+import json
 from collections import Counter
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
@@ -82,29 +83,65 @@ def parse(data: bytes):
     return rows
 
 
+GEMINI = {
+    "series": "Gemini v3 owner-run campaign",
+    "mapping": "historical v3; original-source replay only",
+    "date": "2026-10-16",
+    "models": [
+        {"model": "gemini-4-argon", "assigned": 44, "scored": 44, "excluded": 0, "aborted": 0,
+         "goal": "44/44 (100.0%)", "quality": "42/44 (95.5%)", "cost_usd": None},
+        {"model": "gemini-3.8-flash", "assigned": 44, "scored": 43, "excluded": 1, "aborted": 0,
+         "goal": "43/43 (100.0%)", "quality": "20/43 (46.5%)", "cost_usd": None},
+    ],
+}
+
+
+def parse_gemini(data):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('Duplicate JSON key')
+            result[key] = value
+        return result
+    value = json.loads(data, object_pairs_hook=unique)
+    # Exact approved schema, types and values: reject extra fields or any drift.
+    if json.dumps(value, sort_keys=True) != json.dumps(GEMINI, sort_keys=True):
+        raise ValueError('Approved Gemini aggregate schema or figures drift')
+    return [Row(m['model'], 'gemini', f"{m['scored']}/44",
+                '—' if not m['excluded'] else f"{m['excluded']} excluded",
+                m['goal'], m['quality'], 'not reported') for m in value['models']]
+
+
+def all_rows():
+    rows = parse((ROOT / 'source/MODEL_RESULTS.md').read_bytes()) + parse_gemini(
+        (ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes())
+    if len(rows) != 21 or len({r.model for r in rows}) != 21:
+        raise ValueError('Duplicate or missing model')
+    return sorted(rows, key=lambda row: (row.model.casefold(), row.model))
+
+
 def render_row(row):
+    short_labels = {'baseline': 'Baseline', 'sol': 'Additional Sol', 'meta': 'Meta'}
+    labels_by_run = {key: (short_labels[key], url) for key, title, url in SERIES.values()}
+    labels_by_run['gemini'] = ('Gemini v3 · 2026-10-16 · owner-held audit', '#gemini-context')
+    title, url = labels_by_run[row.cohort]
     values = (row.scored, row.unscored, row.goal, row.quality, row.cost)
     labels = ('Scored / assigned', 'Unscored', 'Goal achieved', 'All quality checks', 'Est. USD')
-    return '<tr><th scope="row"><code>' + escape(row.model) + '</code></th>' + ''.join(
+    return '<tr><th scope="row"><code>' + escape(row.model) + '</code></th>' + f'<td data-label="Source / run"><a href="{escape(url)}">{escape(title)}</a></td>' + ''.join(
         f'<td data-label="{label}">{escape(value)}</td>' for label, value in zip(labels, values)) + '</tr>'
 
 
 def render(rows):
-    sections = []
-    for i, (key, title, url) in enumerate(SERIES.values(), 1):
-        subset = [r for r in rows if r.cohort == key]
-        note = 'The pinned table does not provide an individual source commit for this run.' if key == 'sol' else 'Source commit linked as published in the pinned table.'
-        source_label = 'Published table' if key == 'sol' else 'Run source'
-        sections.append(f'''<section class="cohort" id="{key}" aria-labelledby="{key}-title">
-<div class="cohort-heading"><div><p class="eyebrow">Series {i:02d} · {len(subset)} {'model' if len(subset) == 1 else 'models'}</p><h2 id="{key}-title">{title}</h2></div><a href="{url}">{source_label} ↗</a></div>
-<p class="series-note">Distinct run/settings. {note}</p>
-<table><caption class="sr-only">{title} results in published source order</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Scored /<br> assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col">All quality checks</th><th scope="col">Est. USD</th></tr></thead><tbody>{''.join(map(render_row, subset))}</tbody></table></section>''')
+    table = '<div class="results-table"><table aria-describedby="comparison gemini-context"><caption>21 model observations · alphabetical by exact model ID</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Source / run</th><th scope="col">Scored / assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col">All quality checks</th><th scope="col">Est. USD</th></tr></thead><tbody>' + ''.join(map(render_row, sorted(rows, key=lambda row: (row.model.casefold(), row.model)))) + '</tbody></table></div>'
     template = (ROOT / 'tools/template.html').read_text()
-    return template.replace('{{DOC}}', DOC).replace('{{SHA}}', SHA).replace('{{UPSTREAM}}', UPSTREAM).replace('{{RESULTS}}', '\n'.join(sections))
+    return template.replace('{{DOC}}', DOC).replace('{{SHA}}', SHA).replace('{{UPSTREAM}}', UPSTREAM).replace('{{RESULTS}}', table)
 
 
 def outputs():
-    return {'index.html': render(parse((ROOT / 'source/MODEL_RESULTS.md').read_bytes())).encode(),
+    rows = all_rows()
+    return {'index.html': render(rows).encode(),
+            'GEMINI_AGGREGATES.json': (ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes(),
             'favicon.svg': (ROOT / 'tools/favicon.svg').read_bytes(),
             'style.css': (ROOT / 'tools/style.css').read_bytes(),
             'MODEL_RESULTS.md': (ROOT / 'source/MODEL_RESULTS.md').read_bytes(),
@@ -122,12 +159,12 @@ def main():
         actual = {str(p.relative_to(site)) for p in site.rglob('*') if p.is_file()}
         if actual != set(files) or any(not (site / name).exists() or (site / name).read_bytes() != data for name, data in files.items()):
             raise SystemExit('Generated site differs; run python3 tools/build.py')
-        print('OK: pinned snapshot and generated site match (19 models; 16 + 1 + 2).')
+        print('OK: pinned public snapshot, approved Gemini aggregates and generated site match (21 models).')
     else:
         site.mkdir(exist_ok=True)
         for name, data in files.items():
             (site / name).write_bytes(data)
-        print('Built site/ from pinned public snapshot (19 models).')
+        print('Built site/ from 19 pinned public rows and 2 approved Gemini aggregates (21 models).')
 
 if __name__ == '__main__':
     main()

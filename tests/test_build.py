@@ -1,4 +1,6 @@
 import dataclasses
+import json
+from decimal import Decimal, ROUND_HALF_UP
 from hashlib import sha256
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
@@ -25,6 +27,30 @@ Qwen/Qwen3.5-9B|44|0|0|0|96
 gpt-6.1-sol|44|0|44|42|53
 muse-wonder-1.0|43|1|27|12|33
 muse-spark-1.3|44|0|18|4|11'''
+
+
+# Independently pinned human-alphabetical order of the 21 exact model IDs.
+EXPECTED_MODEL_ORDER = '''claude-fable-5-1
+claude-opus-5-5
+deepseek-ai/DeepSeek-V4-Flash-0731
+deepseek-ai/DeepSeek-V4.1-Flash
+gemini-3.8-flash
+gemini-4-argon
+gpt-6-astra
+gpt-6-luna
+gpt-6-sol
+gpt-6.1-sol
+mistral-medium-3-5
+muse-spark-1.3
+muse-wonder-1.0
+nvidia/GLM-5.2-NVFP4-262K
+nvidia/Kimi-K2.6-NVFP4
+nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
+Qwen/Qwen3.5-397B-A17B-FP8
+Qwen/Qwen3.5-9B
+Qwen/Qwen3.6-35B-A3B-FP8
+Qwen/Qwen3.8-27B-FP8
+zai-org/GLM-5.3-Flash'''.splitlines()
 
 class Document(HTMLParser):
     def __init__(self):
@@ -55,12 +81,13 @@ class Document(HTMLParser):
 class BuildTests(unittest.TestCase):
     def setUp(self):
         self.data = (build.ROOT / 'source/MODEL_RESULTS.md').read_bytes()
-        self.rows = build.parse(self.data)
+        self.public_rows = build.parse(self.data)
+        self.rows = build.all_rows()
 
     def test_all_published_rows(self):
         expected = [line.split('|') for line in EXPECTED.splitlines()]
-        self.assertEqual(len(self.rows), 19)
-        for i, (row, values) in enumerate(zip(self.rows, expected)):
+        self.assertEqual(len(self.public_rows), 19)
+        for i, (row, values) in enumerate(zip(self.public_rows, expected)):
             model, n, missing, goal, quality, cost = values
             self.assertEqual(row.model, model)
             self.assertEqual(row.scored, n + '/44')
@@ -69,9 +96,9 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(row.quality.split()[0], quality + '/' + n)
             self.assertEqual(row.cost, '$' + cost)
             self.assertEqual(row.cohort, 'baseline' if i < 16 else 'sol' if i == 16 else 'meta')
-        self.assertEqual(self.rows[1].quality, '35/43 (81.4%)')
-        self.assertEqual(self.rows[8].goal, '9/40 (22.5%)')
-        self.assertEqual(self.rows[17].goal, '27/43 (62.8%)')
+        self.assertEqual(self.public_rows[1].quality, '35/43 (81.4%)')
+        self.assertEqual(self.public_rows[8].goal, '9/40 (22.5%)')
+        self.assertEqual(self.public_rows[17].goal, '27/43 (62.8%)')
 
     def test_unknown_and_malformed_inputs_rejected(self):
         changes = [
@@ -105,10 +132,13 @@ class BuildTests(unittest.TestCase):
         html = build.render(self.rows)
         doc = Document()
         doc.feed(html)
-        self.assertEqual(doc.models, [r.model for r in self.rows])
-        for text in ('not an official benchmark leaderboard', 'not independent semantic tasks', 'No independent human semantic validation yet', 'Estimates are not invoices', 'No pooled cross-series ordering', 'production predictiveness', 'official Lifecycle results', 'Prospire Technologies Ltd', 'CC BY 4.0', 'Apache-2.0'):
+        self.assertEqual(doc.models, EXPECTED_MODEL_ORDER)
+        for text in ('not an official benchmark leaderboard', 'not independent semantic tasks', 'No independent human semantic validation yet', 'Estimates are not invoices', 'Alphabetical order is not a quality ranking', 'production predictiveness', 'official Lifecycle results', 'Prospire Technologies Ltd', 'CC BY 4.0', 'Apache-2.0'):
             self.assertIn(text, html)
-        self.assertNotIn('gemini', html.lower())
+        self.assertEqual(doc.tags.count('table'), 1)
+        self.assertEqual(len(doc.models), 21)
+        self.assertEqual(len(set(doc.models)), 21)
+        self.assertNotIn('Three separate series', html)
         for tag in ('script', 'iframe', 'form'):
             self.assertNotIn(tag, doc.tags)
         for url in doc.urls:
@@ -116,6 +146,16 @@ class BuildTests(unittest.TestCase):
         self.assertIn('href="./style.css"', html)
         self.assertIn('class="skip"', html)
         self.assertIn('lang="en"', html)
+
+    def test_render_sorts_unordered_models_and_breaks_casefold_ties(self):
+        doc = Document()
+        doc.feed(build.render(reversed(self.rows)))
+        self.assertEqual(doc.models, EXPECTED_MODEL_ORDER)
+        models = ['beta', 'alpha', 'ALPHA', 'Beta', 'Alpha']
+        rows = [dataclasses.replace(self.rows[0], model=model) for model in models]
+        doc = Document()
+        doc.feed(build.render(rows))
+        self.assertEqual(doc.models, ['ALPHA', 'Alpha', 'alpha', 'Beta', 'beta'])
 
     def test_about_project_scope_and_pinned_sources(self):
         html = build.render(self.rows)
@@ -153,7 +193,7 @@ class BuildTests(unittest.TestCase):
         for url in doc.urls:
             if url.startswith('#'):
                 self.assertEqual(doc.ids.count(url[1:]), 1, url)
-        self.assertEqual(doc.models, [r.model for r in self.rows])
+        self.assertEqual(doc.models, EXPECTED_MODEL_ORDER)
 
     def test_canonical_data_license(self):
         # Independent pin of the canonical CC BY 4.0 text at the approved revision.
@@ -162,16 +202,90 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(sha256(data).hexdigest(), 'd557539df68e771cc1eedcc91d13f70fca930e508d11eedcafa4b15db49e3744')
         self.assertEqual(build.outputs()['LICENSE-DATA'], data)
 
-    def test_local_favicon_and_cohort_source_labels(self):
+    def test_local_favicon_and_row_source_labels(self):
         html = build.render(self.rows)
         self.assertIn('<link rel="icon" type="image/svg+xml" href="./favicon.svg">', html)
         svg = build.outputs()['favicon.svg']
         self.assertEqual(ET.fromstring(svg).tag, '{http://www.w3.org/2000/svg}svg')
         self.assertNotIn(b'href=', svg)
-        self.assertIn(f'<a href="{build.DOC}">Published table ↗</a>', html)
+        self.assertIn(f'href="{build.DOC}"', html)
         for key in ('baseline', 'meta'):
             url = next(url for cohort, title, url in build.SERIES.values() if cohort == key)
-            self.assertIn(f'<a href="{url}">Run source ↗</a>', html)
+            self.assertIn(f'href="{url}"', html)
+
+    def test_unified_figures_and_sources(self):
+        expected = EXPECTED + '\ngemini-4-argon|44|0|44|42|not reported\ngemini-3.8-flash|43|1|43|20|not reported'
+        by_id = {r.model: r for r in self.rows}
+        self.assertEqual(set(by_id), {line.split('|')[0] for line in expected.splitlines()})
+        html = build.render(self.rows)
+        for line in expected.splitlines():
+            model, n, missing, goal, quality, cost = line.split('|')
+            row = by_id[model]
+            self.assertEqual(row.scored, n + '/44')
+            self.assertEqual(row.unscored, '—' if missing == '0' else missing + (' aborted' if model == 'gpt-6-luna' else ' excluded'))
+            for value, count in ((row.goal, goal), (row.quality, quality)):
+                percent = (Decimal(count) * 100 / Decimal(n)).quantize(Decimal('.1'), rounding=ROUND_HALF_UP)
+                self.assertEqual(value, f'{count}/{n} ({percent}%)')
+            self.assertEqual(row.cost, cost if cost == 'not reported' else '$' + cost)
+            self.assertIn(build.render_row(row), html)
+        self.assertEqual([r.model for r in self.rows], EXPECTED_MODEL_ORDER)
+        self.assertEqual({r.cohort for r in self.rows}, {'baseline', 'sol', 'meta', 'gemini'})
+        for text in ('19 rows', '2 Gemini rows', 'owner-held/non-public', 'no public raw trajectories or evidence',
+                     'no independent human review or provider attestation', 'does not mean success',
+                     'historical v3, owner-run · 2026-10-16', 'Audit retained privately',
+                     'v4 changed behavior mapping', 'historical results were not regraded',
+                     'not reported</strong> (not zero)', 'not approved or reliably reconciled',
+                     'docs/GEMINI_OFFLINE.md'):
+            self.assertIn(text, html)
+        for text in ('/root/', '/var/', 'ledger', 'scorecard', 'credential', 'campaign payload'):
+            self.assertNotIn(text, html)
+        self.assertEqual(build.outputs()['MODEL_RESULTS.md'], self.data)
+
+    def test_concise_gemini_caveat_and_no_replay_claim(self):
+        html = build.render(self.rows)
+        before, context = html.split('<aside class="aggregate-context"', 1)
+        caveat, after = context.split('</aside>', 1)
+        self.assertEqual(caveat.count('<p>'), 2)
+        self.assertTrue(after.lstrip().startswith('<div class="results-table"'))
+        pinned = 'https://github.com/DwellyOrg/OperateBench/blob/963c6b265c71a632d9b333b01e0edcb21685d9e3/docs/GEMINI_OFFLINE.md'
+        self.assertIn(f'href="{pinned}"', caveat)
+        for name, text in (('website', html), ('README.md', (build.ROOT / 'README.md').read_text())):
+            for claim in ('87', '88 assigned', 'replay', 'zero provider calls'):
+                self.assertNotIn(claim, text.lower(), name)
+
+    def test_gemini_fail_closed(self):
+        data = (build.ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes()
+        self.assertEqual(len(build.parse_gemini(data)), 2)
+        for mutate in (
+            lambda x: x.update(extra='unapproved'),
+            lambda x: x.update(mapping='v4'),
+            lambda x: x.update(date='2026-10-17'),
+            lambda x: x['models'][0].update(scored=43),
+            lambda x: x['models'][0].update(assigned=43),
+            lambda x: x['models'][0].update(assigned=44.0),
+            lambda x: x['models'][0].update(cost_usd=0),
+            lambda x: x['models'][0].update(quality='42/44 (95.4%)'),
+            lambda x: x['models'][0].update(model='gemini-3.8-flash'),
+            lambda x: x['models'].append(x['models'][0]),
+            lambda x: x['models'][0].update(excluded=1),
+            lambda x: x['models'][0].update(aborted=1),
+        ):
+            value = json.loads(data)
+            mutate(value)
+            with self.assertRaises(ValueError):
+                build.parse_gemini(json.dumps(value))
+        with self.assertRaises(ValueError):
+            build.parse_gemini(data.decode().replace('"assigned": 44', '"assigned": 44, "assigned": 44', 1))
+
+    def test_documentation_disclosure(self):
+        for name in ('README.md', 'NOTICE'):
+            text = (build.ROOT / name).read_text()
+            for claim in ('19', 'Gemini rows', 'owner-held/non-public', 'CC BY 4.0', 'Prospire Technologies Ltd'):
+                self.assertIn(claim, text, name)
+        for name, data in build.outputs().items():
+            if name.endswith(('.html', '.json', '.md')):
+                for forbidden in (b'/root/', b'/var/www/', b'ledger', b'scorecard', b'credentials'):
+                    self.assertNotIn(forbidden, data, name)
 
     def test_generated_output_matches(self):
         for name, data in build.outputs().items():

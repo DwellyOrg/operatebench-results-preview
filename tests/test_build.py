@@ -240,7 +240,7 @@ class BuildTests(unittest.TestCase):
         html = build.render(self.rows)
         self.assertIn('<th scope="col" aria-sort="descending">All quality checks ↓</th>', html)
         caption = re.search(r'<caption>(.*?)</caption>', html).group(1)
-        self.assertEqual(caption, '21 models · sorted by strict quality ↓')
+        self.assertEqual(caption, '21 models · latest 2026-10-24 · strict quality ↓')
         self.assertLessEqual(len(caption.split()), 12)
         comparison = re.search(r'<p id="comparison">(.*?)</p>', html).group(1)
         self.assertLessEqual(len(comparison.split()), 45)
@@ -258,7 +258,7 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(len(table_attrs), 1)
         describedby = table_attrs[0].get('aria-describedby', '').split()
         self.assertEqual(describedby.count('meta-context'), 1)
-        self.assertEqual(describedby, ['comparison', 'meta-context', 'gemini-context'])
+        self.assertEqual(describedby, ['comparison', 'spread-context', 'repeat-context', 'meta-context', 'gemini-context'])
         for context_id in describedby:
             self.assertEqual(doc.ids.count(context_id), 1, context_id)
         readme = (build.ROOT / 'README.md').read_text()
@@ -417,7 +417,8 @@ class BuildTests(unittest.TestCase):
                       '43/44 scored'):
             self.assertIn(claim, note)
         visible_note = re.sub(r'<[^>]+>', '', note)
-        self.assertLessEqual(len(visible_note), 210)
+        self.assertLessEqual(len(visible_note), 300)
+        self.assertIn("Current Wonder: 40/44 scored, with 4 technical exclusions (3 no-tool responses + 1 server error)", visible_note)
         for disclaimer in ('cost', 'invoice', 'failure'):
             self.assertNotIn(disclaimer, visible_note.lower())
         self.assertLess(html.index('id="results"'), html.index('id="meta-context"'))

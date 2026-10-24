@@ -114,6 +114,88 @@ def parse_gemini(data):
                 m['goal'], m['quality'], 'not reported') for m in value['models']]
 
 
+REPEAT_DIGEST = 'da3a70a54311b3ecba3b9361c9539322bea071d656c16672cd6026905363fc74'
+REPEAT_CONDITIONS = 'Core includes the public payment-history and approval-checkpoint corrections. Provider compatibility adapters differ from earlier series. Historical grades were not regraded.'
+
+
+def unique_fields(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('Duplicate JSON key')
+        result[key] = value
+    return result
+
+
+def percent(value):
+    return str((Decimal(value.numerator) * 100 / value.denominator).quantize(Decimal('.1'), rounding=ROUND_HALF_UP)) + '%'
+
+
+def parse_repeat(data):
+    value = json.loads(data, object_pairs_hook=unique_fields)
+    if (type(value) is not dict or set(value) != {'schema_version', 'series', 'date', 'conditions', 'models'}
+            or type(value['schema_version']) is not int or value['schema_version'] != 1
+            or value['series'] != '2026-10-24 owner-run repeat'
+            or value['date'] != '2026-10-24' or value['conditions'] != REPEAT_CONDITIONS
+            or type(value['models']) is not list):
+        raise ValueError('Unapproved repeat schema or conditions')
+    rows = []
+    for m in value['models']:
+        if type(m) is not dict or set(m) != {'model', 'assigned', 'scored', 'excluded', 'aborted', 'goal_completed', 'reliable', 'cost_usd'}:
+            raise ValueError('Unapproved repeat fields')
+        if type(m['model']) is not str:
+            raise ValueError('Invalid repeat model ID')
+        if any(type(m[k]) is not int for k in ('assigned', 'scored', 'excluded', 'aborted', 'goal_completed', 'reliable')):
+            raise ValueError('Repeat counts must be integers')
+        if (m['assigned'] != 44 or not 0 <= m['reliable'] <= m['goal_completed'] <= m['scored'] <= 44
+                or m['scored'] == 0 or min(m['excluded'], m['aborted']) < 0
+                or m['assigned'] != m['scored'] + m['excluded'] + m['aborted'] or m['cost_usd'] is not None):
+            raise ValueError('Invalid repeat counts or cost')
+        metrics = [f"{m[k]}/{m['scored']} ({percent(Fraction(m[k], m['scored']))})" for k in ('goal_completed', 'reliable')]
+        unscored = ', '.join(f"{m[k]} {k}" for k in ('excluded', 'aborted') if m[k]) or '—'
+        rows.append(Row(m['model'], 'repeat', f"{m['scored']}/44", unscored, *metrics, 'not reported'))
+    if len(rows) != 21 or {r.model for r in rows} != {r.model for r in all_rows()}:
+        raise ValueError('Repeat model census drift')
+    raw = data.encode() if isinstance(data, str) else data
+    if sha256(raw).hexdigest() != REPEAT_DIGEST:
+        raise ValueError('Approved repeat bytes drift')
+    return sorted(rows, key=quality_order)
+
+
+def latest_rows():
+    return parse_repeat((ROOT / 'source/REPEAT_20261024.json').read_bytes())
+
+
+def observed_range(rows, metric):
+    values = [metric_fraction(getattr(r, metric), r.scored) for r in rows]
+    low, high = min(values), max(values)
+    return percent(low) if low == high else percent(low)[:-1] + '–' + percent(high)
+
+
+def observation(row):
+    labels = {key: (title, url) for key, title, url in SERIES.values()}
+    labels['gemini'] = ('Historical Gemini v3 · 2026-10-16 · owner-held audit', './GEMINI_AGGREGATES.json')
+    labels['repeat'] = ('2026-10-24 · owner-held audit/no public run commit', './REPEAT_20261024.json')
+    title, url = labels[row.cohort]
+    if row.cohort == 'sol':
+        title = 'Table · no run commit'
+    prefix = '' if row.cohort in ('repeat', 'gemini') else 'Historical · '
+    return (f'<li><a href="{escape(url)}">{escape(prefix + title)}</a>; '
+            f'scored / assigned {escape(row.scored)}; unscored {escape(row.unscored)}; '
+            f'goal {escape(row.goal)}; all quality checks {escape(row.quality)}; '
+            f'estimated USD {escape(row.cost)}.</li>')
+
+
+def render_latest_row(row, old):
+    series = [old, row]
+    history = '<details><summary>2 series · observation history</summary><ul>' + ''.join(observation(r) for r in series) + '</ul></details>'
+    values = [history, escape(row.scored), escape(row.unscored),
+              escape(row.goal) + '<small>Observed ' + observed_range(series, 'goal') + '</small>',
+              escape(row.quality) + '<small>Observed ' + observed_range(series, 'quality') + '</small>', 'not reported']
+    labels = ['Source / run', 'Scored / assigned', 'Unscored', 'Goal achieved', 'All quality checks', 'Est. USD']
+    return '<tr><th scope="row"><code>' + escape(row.model) + '</code></th>' + ''.join(f'<td data-label="{label}">{value}</td>' for label, value in zip(labels, values)) + '</tr>'
+
+
 def metric_fraction(value, scored):
     """Read the exact scored-case fraction; display percentages never sort rows."""
     scored_match = re.fullmatch(r'(\d+)/44', scored)
@@ -153,15 +235,40 @@ def render_row(row):
         f'<td data-label="{label}">{escape(value)}</td>' for label, value in zip(labels, values)) + '</tr>'
 
 
+def render_table_rows(rows, renderer=render_row):
+    """Sort and escape table bodies without attaching latest-series context."""
+    return ''.join(renderer(row) for row in sorted(rows, key=quality_order))
+
+
+def disposition_count(row, disposition):
+    return sum(int(count) for count, label in re.findall(r'(\d+) (excluded|aborted)', row.unscored)
+               if label == disposition)
+
+
 def render(rows):
-    table = '<div class="results-table"><table aria-describedby="comparison meta-context gemini-context"><caption>21 models · sorted by strict quality ↓</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Source / run</th><th scope="col">Scored / assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col" aria-sort="descending">All quality checks ↓</th><th scope="col">Est. USD</th></tr></thead><tbody>' + ''.join(map(render_row, sorted(rows, key=quality_order))) + '</tbody></table></div>'
+    rows = list(rows)
+    if not rows or any(row.cohort != 'repeat' for row in rows):
+        raise ValueError('Latest page requires repeat rows only')
+    historical = {row.model: row for row in all_rows()}
+    if len(rows) != len(historical) or {row.model for row in rows} != set(historical):
+        raise ValueError('Latest page requires the exact model census')
+    wonder = next(row for row in rows if row.model == 'muse-wonder-1.0')
+    total_scored = sum(int(row.scored.split('/')[0]) for row in rows)
+    total_excluded = sum(disposition_count(row, 'excluded') for row in rows)
+    total_aborted = sum(disposition_count(row, 'aborted') for row in rows)
+    totals = f'{total_scored} scored + {total_excluded} excluded'
+    if total_aborted:
+        totals += f' + {total_aborted} aborted'
+
+    table = '<div class="results-table"><table aria-describedby="comparison spread-context repeat-context meta-context gemini-context"><caption>21 models · latest 2026-10-24 · strict quality ↓</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Source / run</th><th scope="col">Scored / assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col" aria-sort="descending">All quality checks ↓</th><th scope="col">Est. USD</th></tr></thead><tbody>' + render_table_rows(rows, lambda row: render_latest_row(row, historical[row.model])) + '</tbody></table></div>'
     template = (ROOT / 'tools/template.html').read_text()
-    return template.replace('{{DOC}}', DOC).replace('{{SHA}}', SHA).replace('{{UPSTREAM}}', UPSTREAM).replace('{{RESULTS}}', table)
+    return template.replace('{{DOC}}', DOC).replace('{{SHA}}', SHA).replace('{{UPSTREAM}}', UPSTREAM).replace('{{RESULTS}}', table).replace('{{TOTALS}}', totals).replace('{{WONDER_SCORED}}', escape(wonder.scored)).replace('{{WONDER_EXCLUDED}}', str(disposition_count(wonder, 'excluded')))
 
 
 def outputs():
-    rows = all_rows()
+    rows = latest_rows()
     return {'index.html': render(rows).encode(),
+            'REPEAT_20261024.json': (ROOT / 'source/REPEAT_20261024.json').read_bytes(),
             'GEMINI_AGGREGATES.json': (ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes(),
             'favicon.svg': (ROOT / 'tools/favicon.svg').read_bytes(),
             'style.css': (ROOT / 'tools/style.css').read_bytes(),
@@ -180,12 +287,12 @@ def main():
         actual = {str(p.relative_to(site)) for p in site.rglob('*') if p.is_file()}
         if actual != set(files) or any(not (site / name).exists() or (site / name).read_bytes() != data for name, data in files.items()):
             raise SystemExit('Generated site differs; run python3 tools/build.py')
-        print('OK: pinned public snapshot, approved Gemini aggregates and generated site match (21 models).')
+        print('OK: pinned historical sources, approved repeat aggregates and generated site match (21 models).')
     else:
         site.mkdir(exist_ok=True)
         for name, data in files.items():
             (site / name).write_bytes(data)
-        print('Built site/ from 19 pinned public rows and 2 approved Gemini aggregates (21 models).')
+        print('Built site/ with 21 latest models and two original series per model.')
 
 if __name__ == '__main__':
     main()

@@ -85,6 +85,7 @@ class BuildTests(unittest.TestCase):
         self.data = (build.ROOT / 'source/MODEL_RESULTS.md').read_bytes()
         self.public_rows = build.parse(self.data)
         self.rows = build.all_rows()
+        self.latest = build.latest_rows()
 
     def test_all_published_rows(self):
         expected = [line.split('|') for line in EXPECTED.splitlines()]
@@ -131,10 +132,10 @@ class BuildTests(unittest.TestCase):
         self.assertNotIn('<script>', rendered)
 
     def test_html_census_and_guardrails(self):
-        html = build.render(self.rows)
+        html = build.render(self.latest)
         doc = Document()
         doc.feed(html)
-        self.assertEqual(doc.models, EXPECTED_MODEL_ORDER)
+        self.assertEqual(doc.models, [r.model for r in self.latest])
         for text in ('not an official leaderboard or validated general-capability ranking', 'not independent semantic tasks', 'No independent human semantic validation yet', 'Estimates are not invoices', 'observed strict quality pass rate among scored cases', 'Prospire Technologies Ltd', 'CC BY 4.0', 'Apache-2.0'):
             self.assertIn(text, html)
         self.assertEqual(doc.tags.count('table'), 1)
@@ -151,12 +152,12 @@ class BuildTests(unittest.TestCase):
 
     def test_render_sorts_unordered_models_and_breaks_casefold_ties(self):
         doc = Document()
-        doc.feed(build.render(reversed(self.rows)))
-        self.assertEqual(doc.models, EXPECTED_MODEL_ORDER)
+        doc.feed(build.render(reversed(self.latest)))
+        self.assertEqual(doc.models, [r.model for r in self.latest])
         models = ['beta', 'alpha', 'ALPHA', 'Beta', 'Alpha']
         rows = [dataclasses.replace(self.rows[0], model=model) for model in models]
         doc = Document()
-        doc.feed(build.render(rows))
+        doc.feed(build.render_table_rows(rows))
         self.assertEqual(doc.models, ['ALPHA', 'Alpha', 'alpha', 'Beta', 'beta'])
 
     def test_exact_fraction_inputs(self):
@@ -193,7 +194,7 @@ class BuildTests(unittest.TestCase):
                     ('c', '43/44', '43/43 (100.0%)', '20/43 (46.5%)'),
                 )]
         doc = Document()
-        doc.feed(build.render(rows))
+        doc.feed(build.render_table_rows(rows))
         self.assertEqual(doc.models, ['c', 'b', 'a', 'z'])
 
     def test_results_intro_markup(self):
@@ -224,7 +225,7 @@ class BuildTests(unittest.TestCase):
 
         for name, html in (
             ('template', (build.ROOT / 'tools/template.html').read_text()),
-            ('rendered', build.render(self.rows)),
+            ('rendered', build.render(self.latest)),
             ('site', (build.ROOT / 'site/index.html').read_text()),
         ):
             with self.subTest(document=name):
@@ -237,10 +238,10 @@ class BuildTests(unittest.TestCase):
                 self.assertEqual(intro.direct_paragraphs, ['comparison'])
 
     def test_order_copy_and_sort_indicator(self):
-        html = build.render(self.rows)
+        html = build.render(self.latest)
         self.assertIn('<th scope="col" aria-sort="descending">All quality checks ↓</th>', html)
         caption = re.search(r'<caption>(.*?)</caption>', html).group(1)
-        self.assertEqual(caption, '21 models · sorted by strict quality ↓')
+        self.assertEqual(caption, '21 models · latest 2026-10-24 · strict quality ↓')
         self.assertLessEqual(len(caption.split()), 12)
         comparison = re.search(r'<p id="comparison">(.*?)</p>', html).group(1)
         self.assertLessEqual(len(comparison.split()), 45)
@@ -258,7 +259,7 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(len(table_attrs), 1)
         describedby = table_attrs[0].get('aria-describedby', '').split()
         self.assertEqual(describedby.count('meta-context'), 1)
-        self.assertEqual(describedby, ['comparison', 'meta-context', 'gemini-context'])
+        self.assertEqual(describedby, ['comparison', 'spread-context', 'repeat-context', 'meta-context', 'gemini-context'])
         for context_id in describedby:
             self.assertEqual(doc.ids.count(context_id), 1, context_id)
         readme = (build.ROOT / 'README.md').read_text()
@@ -280,7 +281,7 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(build.outputs()['GEMINI_AGGREGATES.json'], gemini)
 
     def test_about_project_scope_and_pinned_sources(self):
-        html = build.render(self.rows)
+        html = build.render(self.latest)
         doc = Document()
         doc.feed(html)
         self.assertEqual(doc.ids.count('about'), 1)
@@ -315,7 +316,7 @@ class BuildTests(unittest.TestCase):
         for url in doc.urls:
             if url.startswith('#'):
                 self.assertEqual(doc.ids.count(url[1:]), 1, url)
-        self.assertEqual(doc.models, EXPECTED_MODEL_ORDER)
+        self.assertEqual(doc.models, [r.model for r in self.latest])
 
     def test_canonical_data_license(self):
         # Independent pin of the canonical CC BY 4.0 text at the approved revision.
@@ -325,7 +326,7 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(build.outputs()['LICENSE-DATA'], data)
 
     def test_local_favicon_and_row_source_labels(self):
-        html = build.render(self.rows)
+        html = build.render(self.latest)
         self.assertIn('<link rel="icon" type="image/svg+xml" href="./favicon.svg">', html)
         svg = build.outputs()['favicon.svg']
         self.assertEqual(ET.fromstring(svg).tag, '{http://www.w3.org/2000/svg}svg')
@@ -345,7 +346,7 @@ class BuildTests(unittest.TestCase):
         self.assertIn('“Table · no run commit”', (build.ROOT / 'README.md').read_text())
 
     def test_footer_dual_provenance_and_attribution(self):
-        footer = build.render(self.rows).split('<footer>', 1)[1].split('</footer>', 1)[0]
+        footer = build.render(self.latest).split('<footer>', 1)[1].split('</footer>', 1)[0]
         self.assertIn(f'<a href="{build.DOC}">pinned public OperateBench table (19 rows)</a>', footer)
         self.assertIn('<a href="./GEMINI_AGGREGATES.json">owner-authorized sanitized Gemini aggregates (2 rows)</a>', footer)
         self.assertIn('owned by Prospire Technologies Ltd', footer)
@@ -379,7 +380,7 @@ class BuildTests(unittest.TestCase):
         expected = EXPECTED + '\ngemini-4-argon|44|0|44|42|not reported\ngemini-3.8-flash|43|1|43|20|not reported'
         by_id = {r.model: r for r in self.rows}
         self.assertEqual(set(by_id), {line.split('|')[0] for line in expected.splitlines()})
-        html = build.render(self.rows)
+        html = build.render(self.latest)
         for line in expected.splitlines():
             model, n, missing, goal, quality, cost = line.split('|')
             row = by_id[model]
@@ -389,7 +390,7 @@ class BuildTests(unittest.TestCase):
                 percent = (Decimal(count) * 100 / Decimal(n)).quantize(Decimal('.1'), rounding=ROUND_HALF_UP)
                 self.assertEqual(value, f'{count}/{n} ({percent}%)')
             self.assertEqual(row.cost, cost if cost == 'not reported' else '$' + cost)
-            self.assertIn(build.render_row(row), html)
+            self.assertIn(build.observation(row), html)
         self.assertEqual([r.model for r in self.rows], EXPECTED_MODEL_ORDER)
         self.assertEqual({r.cohort for r in self.rows}, {'baseline', 'sol', 'meta', 'gemini'})
         for text in ('19 rows', '2 Gemini rows', 'owner-held/non-public', 'no public raw trajectories or evidence',
@@ -404,7 +405,7 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(build.outputs()['MODEL_RESULTS.md'], self.data)
 
     def test_meta_historical_tool_choice_disclosure(self):
-        html = build.render(self.rows)
+        html = build.render(self.latest)
         note = re.search(r'<p id="meta-context">(.*?)</p>', html).group(1)
         doc = Document()
         doc.feed(note)
@@ -417,7 +418,8 @@ class BuildTests(unittest.TestCase):
                       '43/44 scored'):
             self.assertIn(claim, note)
         visible_note = re.sub(r'<[^>]+>', '', note)
-        self.assertLessEqual(len(visible_note), 210)
+        self.assertLessEqual(len(visible_note), 300)
+        self.assertIn("Current Wonder: 40/44 scored, with 4 technical exclusions (no-tool responses and a server error)", visible_note)
         for disclaimer in ('cost', 'invoice', 'failure'):
             self.assertNotIn(disclaimer, visible_note.lower())
         self.assertLess(html.index('id="results"'), html.index('id="meta-context"'))
@@ -425,7 +427,7 @@ class BuildTests(unittest.TestCase):
         self.assertLess(html.index('id="gemini-context"'), html.index('<table'))
 
     def test_concise_gemini_caveat_and_no_replay_claim(self):
-        html = build.render(self.rows)
+        html = build.render(self.latest)
         before, context = html.split('<aside class="aggregate-context"', 1)
         caveat, after = context.split('</aside>', 1)
         self.assertEqual(caveat.count('<p>'), 2)

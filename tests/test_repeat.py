@@ -1,4 +1,5 @@
 """Independent current metrics and two-series presentation contracts."""
+import dataclasses
 import json
 from hashlib import sha256
 import unittest
@@ -81,7 +82,7 @@ class RepeatTests(unittest.TestCase):
                     'gemini-4-argon': '95.5%', 'mistral-medium-3-5': '0.0%'}
         for row in self.rows:
             history = [old[row.model], row]
-            html = build.render_latest_row(row)
+            html = build.render_latest_row(row, old[row.model])
             doc = Document(); doc.feed(html)
             self.assertEqual(doc.tags.count('details'), 1)
             self.assertEqual(doc.tags.count('summary'), 1)
@@ -153,6 +154,39 @@ class RepeatTests(unittest.TestCase):
         for url in doc.urls:
             if url.startswith('./') and url != './':
                 self.assertIn(url[2:], expected)
+
+    def test_summary_follows_supplied_rows(self):
+        rows = [dataclasses.replace(row, scored='41/44', unscored='3 excluded',
+                                    goal='20/41 (48.8%)', quality='10/41 (24.4%)')
+                if row.model == 'muse-wonder-1.0' else row for row in self.rows]
+        html = build.render(rows)
+        self.assertIn('918 scored + 6 excluded', html)
+        self.assertIn('Current Wonder: 41/44 scored, with 3 technical exclusions', html)
+        self.assertNotIn('917 scored + 7 excluded', html)
+        self.assertNotIn('3 no-tool responses + 1 server error', html)
+
+    def test_latest_page_rejects_wrong_cohorts_and_census(self):
+        historical = build.all_rows()
+        for rows in (historical, [historical[0], *self.rows[1:]], [],
+                     self.rows[:-1], [self.rows[0], *self.rows[:-1]]):
+            with self.subTest(rows=rows), self.assertRaises(ValueError):
+                build.render(rows)
+
+    def test_history_loaded_once_per_render_without_cross_build_cache(self):
+        with patch.object(build, 'all_rows', wraps=build.all_rows) as load:
+            build.render(self.rows)
+            self.assertEqual(load.call_count, 1)
+            build.render(self.rows)
+            self.assertEqual(load.call_count, 2)
+        original_read = Path.read_bytes
+        def drift(path):
+            data = original_read(path)
+            return data + b'\n' if path.name == 'MODEL_RESULTS.md' else data
+        with patch.object(Path, 'read_bytes', drift):
+            with self.assertRaises(ValueError):
+                build.render(self.rows)
+            with self.assertRaises(ValueError):
+                build.outputs()
 
     def test_fail_closed_manifest(self):
         self.assertEqual(sha256(self.data).hexdigest(), 'da3a70a54311b3ecba3b9361c9539322bea071d656c16672cd6026905363fc74')

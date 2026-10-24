@@ -186,8 +186,7 @@ def observation(row):
             f'estimated USD {escape(row.cost)}.</li>')
 
 
-def render_latest_row(row):
-    old = next(r for r in all_rows() if r.model == row.model)
+def render_latest_row(row, old):
     series = [old, row]
     history = '<details><summary>2 series · observation history</summary><ul>' + ''.join(observation(r) for r in series) + '</ul></details>'
     values = [history, escape(row.scored), escape(row.unscored),
@@ -236,10 +235,34 @@ def render_row(row):
         f'<td data-label="{label}">{escape(value)}</td>' for label, value in zip(labels, values)) + '</tr>'
 
 
+def render_table_rows(rows, renderer=render_row):
+    """Sort and escape table bodies without attaching latest-series context."""
+    return ''.join(renderer(row) for row in sorted(rows, key=quality_order))
+
+
+def disposition_count(row, disposition):
+    return sum(int(count) for count, label in re.findall(r'(\d+) (excluded|aborted)', row.unscored)
+               if label == disposition)
+
+
 def render(rows):
-    table = '<div class="results-table"><table aria-describedby="comparison spread-context repeat-context meta-context gemini-context"><caption>21 models · latest 2026-10-24 · strict quality ↓</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Source / run</th><th scope="col">Scored / assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col" aria-sort="descending">All quality checks ↓</th><th scope="col">Est. USD</th></tr></thead><tbody>' + ''.join(render_latest_row(r) if r.cohort == 'repeat' else render_row(r) for r in sorted(rows, key=quality_order)) + '</tbody></table></div>'
+    rows = list(rows)
+    if not rows or any(row.cohort != 'repeat' for row in rows):
+        raise ValueError('Latest page requires repeat rows only')
+    historical = {row.model: row for row in all_rows()}
+    if len(rows) != len(historical) or {row.model for row in rows} != set(historical):
+        raise ValueError('Latest page requires the exact model census')
+    wonder = next(row for row in rows if row.model == 'muse-wonder-1.0')
+    total_scored = sum(int(row.scored.split('/')[0]) for row in rows)
+    total_excluded = sum(disposition_count(row, 'excluded') for row in rows)
+    total_aborted = sum(disposition_count(row, 'aborted') for row in rows)
+    totals = f'{total_scored} scored + {total_excluded} excluded'
+    if total_aborted:
+        totals += f' + {total_aborted} aborted'
+
+    table = '<div class="results-table"><table aria-describedby="comparison spread-context repeat-context meta-context gemini-context"><caption>21 models · latest 2026-10-24 · strict quality ↓</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Source / run</th><th scope="col">Scored / assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col" aria-sort="descending">All quality checks ↓</th><th scope="col">Est. USD</th></tr></thead><tbody>' + render_table_rows(rows, lambda row: render_latest_row(row, historical[row.model])) + '</tbody></table></div>'
     template = (ROOT / 'tools/template.html').read_text()
-    return template.replace('{{DOC}}', DOC).replace('{{SHA}}', SHA).replace('{{UPSTREAM}}', UPSTREAM).replace('{{RESULTS}}', table)
+    return template.replace('{{DOC}}', DOC).replace('{{SHA}}', SHA).replace('{{UPSTREAM}}', UPSTREAM).replace('{{RESULTS}}', table).replace('{{TOTALS}}', totals).replace('{{WONDER_SCORED}}', escape(wonder.scored)).replace('{{WONDER_EXCLUDED}}', str(disposition_count(wonder, 'excluded')))
 
 
 def outputs():

@@ -1,168 +1,31 @@
-# OperateBench Results Preview
+# OperateBench model averages
 
-A standalone, static English presentation of 21 exact models, with latest 2026-10-24
-counts and observed ranges across two published series per model. Historical data: 19 previously published rows from
-[OperateBench's pinned public table](https://github.com/DwellyOrg/OperateBench/blob/963c6b265c71a632d9b333b01e0edcb21685d9e3/docs/MODEL_RESULTS.md).
-This is a descriptive preview, not an official leaderboard or validated general-capability ranking,
-production prediction, or official Lifecycle result. Two additional Gemini rows are
-owner-authorized sanitized historical aggregates. The current 21 rows come solely from
-`source/REPEAT_20261024.json`. All 21 exact IDs appear once in one
-semantic table, ordered by observed strict quality pass rate among scored cases
-(all-quality-checks numerator / scored denominator), descending. Ties use goal achieved
-fraction descending, then case-insensitive exact model ID ascending, then exact model ID
-ascending. Sorting uses exact rational arithmetic, never floats or rounded percentages.
-The “All quality checks ↓” column identifies the sort key. Baseline, Additional Sol,
-Meta and Gemini v3 labels identify sources/settings. Different runs/settings and historical
-mappings prevent a controlled cross-series capability ranking.
+A static, offline results preview for 21 exact model IDs. The horizontal chart shows average strict quality (passing all original reported checks), on a common 0–100% scale. A compact table also shows average goal achievement and average full-run cost estimates.
 
-## Local build and review
+Each metric is the unweighted arithmetic mean of two original per-observation rates, calculated with exact rational arithmetic. It is not a pooled rate. Rows sort by exact mean quality descending, exact mean goal achievement descending, case-insensitive model ID ascending, then exact model ID ascending. Display percentages round to one decimal place. Heterogeneous settings make these descriptive observations, not a controlled ranking.
 
-Python 3.11+ only; no packages, credentials, network, or provider calls are needed.
+The [pinned observation study](https://github.com/DwellyOrg/OperateBench/blob/3672fdeb6153e6677f5d36d6e6628f50f2efb1d5/docs/studies/2026-10-observations.md) explains the original grades and known correction. Original snapshots and reported grades remain unchanged. The new downloadable `MODEL_AVERAGES.json` contains only model averages and aggregate assumptions; legacy data endpoints remain available for compatibility.
+
+Cost estimates cover full 44-case campaigns including known retries, not invoices. Incomplete estimates are marked ≥; missing or changed pinned costs stop the build. Cache scenarios describe estimates, not actual bill bounds. Approved cost aggregates must pass a strict schema, exact model census, duplicate checks and a byte pin before use. Money ranges round outward to cents; incomplete single amounts round down so a lower bound is not overstated.
+
+## Local validation
+
+Python 3.11+ and the standard library are sufficient. No dependencies, JavaScript, external fonts or network calls are needed.
 
 ```sh
-python3 -m unittest discover -s tests -v
-python3 tools/build.py --check
-python3 tools/build.py
-python3 -m http.server 8000 --directory site
+python -m unittest discover -s tests -v
+PYTHONPATH=.:tests python tests/test_build.py
+PYTHONPATH=.:tests python tests/test_repeat.py
+PYTHONPATH=.:tests python tests/test_averages.py
+PYTHONPATH=. python tests/test_workflow.py
+python tools/build.py
+python tools/build.py --check
 ```
 
-Open `http://localhost:8000/`. `site/` is the complete public-ready artifact.
-All assets use relative URLs and also work at `/operatebench-results-preview/`.
-No external fonts, scripts, analytics, cookies, or runtime requests are used.
-The CSS uses system fonts; there is no dependency installation step.
-Review at desktop and narrow widths and with keyboard navigation before publication.
-The semantic table becomes labeled cards on narrow screens; all content is visible
-without JavaScript. Automated tests do not substitute for browser/accessibility review.
-
-## Source contract and refresh
-
-`source/MODEL_RESULTS.md` is byte-identical to the public document at main SHA
-`963c6b265c71a632d9b333b01e0edcb21685d9e3`; SHA-256:
-`e0774775be2e2897f7cbaefc8a0acd24ecf4900e1114c2513ae2e66f04c2141f`.
-The same bytes are published in `site/MODEL_RESULTS.md`.
-
-To reproduce the currently approved snapshot from a **public-only** checkout:
-
-```sh
-git -C /path/to/public-checkout show 963c6b265c71a632d9b333b01e0edcb21685d9e3:docs/MODEL_RESULTS.md > source/MODEL_RESULTS.md
-python3 tools/build.py
-python3 tools/build.py --check
-```
-
-Never refresh from mutable HEAD, private evidence, unpublished models, or provider
-responses. A future revision requires product owner approval of the exact public
-SHA and scope, followed by review of the source diff, digest, source links,
-parser contract and independent test expectations. Do not merely update the hash
-to make a failed build pass. Build validation rejects structural changes, unknown
-series/URLs, invalid IDs, duplicate rows, census drift, denominator/percentage
-errors and all byte drift (including costs). Estimated USD is an integer source
-estimate, not a derived cost per case or invoice; no underlying billing arithmetic
-is present in the table, so none is inferred. No pooled metrics are generated.
-Unscored exclusions/aborts must reconcile with assigned minus scored cases.
-
-The baseline and Meta commit links are retained exactly as supplied by the table.
-The Sol6.1 row has no individual commit link in that source; the visible source link reads
-“Table · no run commit” and links to the exact pinned public table instead. No missing provenance is invented.
-
-`tools/build.py` parses the snapshot and renders `tools/template.html` plus
-`tools/style.css` and the local `tools/favicon.svg` into `site/`. The 19 public rows are parsed separately from the pinned markdown; two Gemini rows
-are appended from `source/GEMINI_AGGREGATES.json`, also copied into `site/`.
-The independent test fixture is intentionally a regression oracle.
-`--check` compares exact generated bytes and the complete public artifact file
-census. There is no date stamping or nondeterministic output.
-
-## Current repeat source and observed ranges
-
-`source/REPEAT_20261024.json` is the sole approved new source, copied byte for byte
-into `site/REPEAT_20261024.json`. Its SHA-256 is
-`da3a70a54311b3ecba3b9361c9539322bea071d656c16672cd6026905363fc74`.
-The build rejects any byte drift, duplicate JSON fields, schema/type/count changes,
-model census drift, altered date/conditions, and non-null costs. Tests independently
-pin all 21 current metrics and their exact sort order. Counts reconcile to 917 scored
-and 7 excluded, with 44 assigned per model. All current costs are not reported.
-The source is an owner-held audit/no public run commit; the page links the sanitized
-local JSON rather than attributing the run to a public core commit.
-
-The one main table shows latest counts prominently. Each native details/summary
-contains the two original observations, their exact fractions, exclusions, source/run
-labels and historical estimates. Goal and strict quality ranges are descriptive
-minimum–maximum rates using each series' actual scored denominator. Equal endpoints
-show one stable value. These are not confidence intervals or repeated trials under
-identical conditions: evaluator/runtime/adapters changed and historical scores were
-not regraded. Two counts published series, not independent tasks. There are no pooled
-counts/means, composite scores, standard deviations or significance claims.
-Historical Meta Wonder has 43/44 scored; current Wonder has 40/44 scored with four
-technical exclusions (three no-tool responses and one server error).
-
-The finite generated-file census is `index.html`, `style.css`, `favicon.svg`,
-`MODEL_RESULTS.md`, `GEMINI_AGGREGATES.json`, `REPEAT_20261024.json`, `LICENSE-DATA`
-and `.nojekyll`. The repeat JSON and reproduced results are CC BY 4.0 data;
-the publisher and presentation code are Apache-2.0. No raw evidence is included.
-
-## Gemini aggregate provenance and limitations
-
-The two Gemini rows are approved for publication on this site by the product owner,
-from a sanitized aggregate of the Gemini v3 owner-run campaign dated 2026-10-16.
-They do not derive from the pinned public model table. The audit is owner-held/non-public;
-there are no public raw trajectories or evidence, no independent human review,
-and no provider attestation. “Scored” means a scored outcome, not success.
-
-`gemini-4-argon`: 44 assigned, 44 scored, 0 excluded, 0 aborted; goal
-44/44 (100.0%), all quality checks/reliable 42/44 (95.5%).
-`gemini-3.8-flash`: 44 assigned, 43 scored, 1 excluded, 0 aborted; goal
-43/43 (100.0%), all quality checks/reliable 20/43 (46.5%).
-Both estimated USD values are **not reported** (JSON null), never zero:
-per-model estimates are not approved or reliably reconciled for publication.
-
-These are historical v3 results, not regraded under v4. The
-[pinned Gemini offline methodology](https://github.com/DwellyOrg/OperateBench/blob/963c6b265c71a632d9b333b01e0edcb21685d9e3/docs/GEMINI_OFFLINE.md)
-documents that v4 changed behavior mapping. Different runs/settings and historical
-mappings prevent a scientifically controlled comparison. Fractions use scored cases.
-
-The self-contained Gemini metadata contains only approved fields, series, mapping
-and date. Exact schema, types, IDs, figures, denominators, dispositions, cost null,
-semantics and duplicate keys are validated fail closed. No private evidence is read
-by the build; no nonpublic artifacts or source paths/hashes are published.
-
-## Owner-controlled publication boundary
-
-The repository is public and the GitHub Pages site is live. The owner-authorized
-publication of the two Gemini historical aggregates is limited to this site and
-version, retains the descriptive-preview framing, and includes no raw evidence
-or official leaderboard. Future releases require owner review and express approval
-of the exact content to be published; this authorization does not extend to new
-private data or an official ranking.
-
-Changes to `main` deploy only after the workflow tests and generated-site checks
-pass and repository variable `PAGES_PUBLICATION_APPROVED` is the exact string
-`true`. Deployment remains gated by `PAGES_PUBLICATION_APPROVED=true`: CI validates
-but cannot publish unless the owner enables this gate. The workflow can deploy
-on a main push or manual main run. Pull requests only validate. Repository
-visibility, Pages configuration and `github-pages` environment review protection
-remain owner-controlled. There is no custom domain assumption and no CNAME.
-
-The workflow tests and checks the reviewed generated site before rebuilding;
-only `site/` is uploaded. Build permissions are read-only, and only the deploy job
-has `pages: write` and `id-token: write`. Official actions are pinned to full
-commit SHAs. Checkout uses the existing pinned public OperateBench CI revision;
-Pages action pins were resolved from official v5/v4/v4 refs at implementation.
-Hosted Actions needs GitHub bootstrap network; the Python build itself is offline.
+The builder validates original denominators, dispositions, arithmetic, source pins and the full model census internally. Tests cover independently expected means, exact ordering, escaping, chart/table parity, source drift, cost semantics and the publication gate. `--check` rejects modified, missing or extra generated files. The existing workflow publishes only from main with explicit repository approval; this refresh does not change that gate.
 
 ## Attribution and licenses
 
-Original OperateBench source and results are owned by **Prospire Technologies Ltd**.
-The public data/documentation snapshot is licensed under **CC BY 4.0**; see
-[LICENSE-DATA](LICENSE-DATA), the complete canonical license text copied byte for
-byte from [the pinned upstream license](https://github.com/DwellyOrg/OperateBench/blob/963c6b265c71a632d9b333b01e0edcb21685d9e3/LICENSES/CC-BY-4.0.txt).
-This license covers `source/MODEL_RESULTS.md`, its generated
-`site/MODEL_RESULTS.md` copy, the owner-authorized Gemini aggregate metadata and
-its generated copy, `source/REPEAT_20261024.json` and its generated copy,
-and the results reproduced on the page.
-`site/LICENSE-DATA` is an exact generated copy of `LICENSE-DATA`.
-[NOTICE](NOTICE) records this repository’s attribution and license mapping. This site adapts
-presentation, not counts, model names, historical grades, or cohort membership.
-No independent authorship of the original results is claimed.
+Original OperateBench results are owned by Prospire Technologies Ltd. The pinned public table provides 19 historical rows; two Gemini rows are owner-authorized sanitized aggregates. Gemini audit evidence is owner-held/non-public. Approved repeat aggregates provide the second observation for all 21 models. These results and site content are **CC BY 4.0**, with the actual license text in [LICENSE-DATA](LICENSE-DATA). Site code is **Apache-2.0**; see [LICENSE](LICENSE) and [NOTICE](NOTICE). No independent authorship of the source results is claimed.
 
-Site code, tests, templates, styles, favicon and workflow are under **Apache-2.0**; see
-[LICENSE](LICENSE). Attribution is also visible on the public page. This repository
-contains no private campaign evidence.
+[Public project](https://github.com/DwellyOrg/OperateBench/tree/963c6b265c71a632d9b333b01e0edcb21685d9e3)

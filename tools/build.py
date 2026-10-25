@@ -224,7 +224,12 @@ COST_DIGEST = '77b64a66a2c7c823dd0053a51f011cdf32905cf1777a3daf439934b3297d4281'
 COST_METHOD = 'arithmetic_mean_per_model'
 
 
-def parse_costs(data, models, digest=None):
+def parse_costs(data, models, digest):
+    if type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest):
+        raise ValueError('Cost source has no valid approved byte pin')
+    raw = data.encode() if isinstance(data, str) else data
+    if sha256(raw).hexdigest() != digest:
+        raise ValueError('Approved cost bytes drift')
     value = json.loads(data, object_pairs_hook=unique_fields)
     if (type(value) is not dict or set(value) != {'schema_version', 'currency',
             'assigned_cases_per_run', 'average_rule', 'assumptions', 'models'}
@@ -250,9 +255,6 @@ def parse_costs(data, models, digest=None):
             raise ValueError('Reversed cost range')
     if len(value['models']) != 21 or seen != set(models):
         raise ValueError('Average cost census drift')
-    raw = data.encode() if isinstance(data, str) else data
-    if digest is not None and sha256(raw).hexdigest() != digest:
-        raise ValueError('Approved cost bytes drift')
     return value
 
 
@@ -260,8 +262,6 @@ def load_costs(models):
     path = ROOT / 'source/AVERAGE_COSTS.json'
     if not path.exists():
         raise ValueError('Pinned cost source missing')
-    if COST_DIGEST is None:
-        raise ValueError('Cost source has no approved byte pin')
     return parse_costs(path.read_bytes(), models, COST_DIGEST)
 
 
@@ -269,9 +269,9 @@ def money(row):
     if row is None:
         raise ValueError('Average cost required')
     low, high = [Decimal(row[k]) for k in ('mean_cost_low_usd', 'mean_cost_high_usd')]
-    # Outward rounding preserves lower-bound semantics and scenario ranges.
+    # Incomplete estimates floor both bounds; complete ranges round outward.
     lo = low.quantize(Decimal('.01'), rounding=ROUND_FLOOR)
-    hi = high.quantize(Decimal('.01'), rounding=ROUND_CEILING)
+    hi = high.quantize(Decimal('.01'), rounding=ROUND_FLOOR if row['incomplete_usage'] else ROUND_CEILING)
     if low == high:
         amount = f'${lo:.2f}' if row['incomplete_usage'] else f'${low.quantize(Decimal(".01"), rounding=ROUND_HALF_UP):.2f}'
     else:
@@ -301,9 +301,9 @@ def render_chart(rows):
             '<ol class="chart">' + ''.join(bars) + '</ol></figure>')
 
 
-def render(rows=None, costs=None):
+def render(rows=None):
     rows = average_rows(rows)
-    costs = load_costs(r.model for r in rows) if costs is None else costs
+    costs = load_costs(r.model for r in rows)
     by_model = {r['model']: r for r in costs['models']}
     table = ('<div class="results-table"><table aria-describedby="method cost-note"><caption>21 model averages · quality descending</caption>'
         '<thead><tr><th scope="col">Model</th><th scope="col" aria-sort="descending">Average quality (%) ↓</th>'

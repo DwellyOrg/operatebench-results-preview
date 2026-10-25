@@ -1,4 +1,4 @@
-"""Average UI contracts; cost values here are synthetic test-only fixtures."""
+"""Average UI contracts using approved source rows and synthetic formatting fixtures."""
 import dataclasses
 import json
 import re
@@ -171,7 +171,7 @@ class AverageTests(unittest.TestCase):
 
     def test_cost_schema_negatives(self):
         value=fixture();raw=json.dumps(value)
-        self.assertEqual(build.parse_costs(raw,ORDER),value)
+        self.assertEqual(build.parse_costs(raw,ORDER,sha256(raw.encode()).hexdigest()),value)
         mutations=[lambda v:v.update(extra=1),lambda v:v.update(schema_version=True),
             lambda v:v.update(assigned_cases_per_run=44.0),lambda v:v.update(currency='EUR'),
             lambda v:v.update(average_rule='pooled'),lambda v:v.update(assumptions=''),
@@ -182,13 +182,16 @@ class AverageTests(unittest.TestCase):
             mutations.append(lambda v,bad=bad:v['models'][0].update(mean_cost_low_usd=bad))
         for change in mutations:
             v=fixture();change(v)
-            with self.subTest(value=v),self.assertRaises(ValueError):build.parse_costs(json.dumps(v),ORDER)
-        with self.assertRaises(ValueError):build.parse_costs(raw.replace('"currency": "USD"','"currency": "USD", "currency": "USD"'),ORDER)
+            mutated=json.dumps(v).encode()
+            with self.subTest(value=v),self.assertRaises(ValueError):
+                build.parse_costs(mutated,ORDER,sha256(mutated).hexdigest())
+        duplicate=raw.replace('"currency": "USD"','"currency": "USD", "currency": "USD"').encode()
+        with self.assertRaises(ValueError):build.parse_costs(duplicate,ORDER,sha256(duplicate).hexdigest())
         with self.assertRaises(ValueError):build.parse_costs(raw,ORDER,'0'*64)
 
     def test_money_bounds_ranges_and_estimate_note(self):
         row=fixture()['models'][0]
-        self.assertEqual(build.money(row),'≥ $1.23–$2.35')
+        self.assertEqual(build.money(row),'≥ $1.23–$2.34')
         row.update(mean_cost_high_usd='1.234')
         self.assertEqual(build.money(row),'≥ $1.23')
         row.update(incomplete_usage=False)
@@ -197,8 +200,45 @@ class AverageTests(unittest.TestCase):
         self.assertEqual(build.money(row),'$0.01')
         row.update(incomplete_usage=True)
         self.assertEqual(build.money(row),'≥ $0.00')
-        html=build.render(costs=fixture())
-        for text in ('including known retries','not invoices','≥ means an incomplete estimate','≥ $1.23–$2.35'):
+        row.update(mean_cost_low_usd='1.234',mean_cost_high_usd='2.345',incomplete_usage=False)
+        self.assertEqual(build.money(row),'$1.23–$2.35')
+        row.update(mean_cost_low_usd='1.235',mean_cost_high_usd='1.235')
+        self.assertEqual(build.money(row),'$1.24')
+        row.update(mean_cost_low_usd='0.009',mean_cost_high_usd='0.011')
+        self.assertEqual(build.money(row),'$0.00–$0.02')
+        row.update(incomplete_usage=True)
+        self.assertEqual(build.money(row),'≥ $0.00–$0.01')
+        html=build.render()
+        for text in ('including known retries','not invoices','≥ means an incomplete estimate','≥ $0.29–$2.52'):
             self.assertIn(text,html)
+
+    def test_incomplete_river_source_ranges(self):
+        expected={
+            'deepseek-ai/DeepSeek-V4-Flash-0731':'≥ $0.33–$2.54',
+            'Qwen/Qwen3.8-27B-FP8':'≥ $0.29–$2.52',
+            'deepseek-ai/DeepSeek-V4.1-Flash':'≥ $0.43–$2.90',
+            'nvidia/Kimi-K2.6-NVFP4':'≥ $0.15–$1.00',
+        }
+        rows=[r for r in build.load_costs(ORDER)['models']
+              if r['incomplete_usage'] and r['pricing_basis']=='river_owner_cache_scenarios']
+        self.assertEqual({r['model'] for r in rows},set(expected))
+        for row in rows:
+            with self.subTest(model=row['model']):
+                self.assertEqual(build.money(row),expected[row['model']])
+
+    def test_render_rejects_cost_override(self):
+        bad=fixture()
+        bad['models'][0].update(mean_cost_low_usd='-2',mean_cost_high_usd='-1')
+        with self.assertRaises(TypeError):build.render(costs=bad)
+        with self.assertRaises(TypeError):build.render(None,bad)
+
+    def test_parse_costs_requires_valid_pin(self):
+        raw=json.dumps(fixture()).encode()
+        with self.assertRaises(TypeError):build.parse_costs(raw,ORDER)
+        for pin in (None,'','0'*63,'g'*64,0,True):
+            with self.subTest(pin=pin),self.assertRaises(ValueError):
+                build.parse_costs(raw,ORDER,pin)
+        with self.assertRaisesRegex(ValueError,'Approved cost bytes drift'):
+            build.parse_costs(raw+b'\n',ORDER,sha256(raw).hexdigest())
 
 if __name__=='__main__': unittest.main()

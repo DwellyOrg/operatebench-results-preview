@@ -6,7 +6,7 @@ Each metric is the unweighted arithmetic mean of two original per-observation ra
 
 The [pinned observation study](https://github.com/DwellyOrg/OperateBench/blob/3672fdeb6153e6677f5d36d6e6628f50f2efb1d5/docs/studies/2026-10-observations.md) explains the original grades and known correction. Original snapshots and reported grades remain unchanged. The new downloadable `MODEL_AVERAGES.json` contains only model averages and aggregate assumptions; legacy data endpoints remain available for compatibility.
 
-Cost estimates cover full 44-case campaigns including known retries, not invoices. Incomplete estimates are marked ≥; missing or changed pinned costs stop the build. Cache scenarios describe estimates, not actual bill bounds. Approved cost aggregates must pass a strict schema, exact model census, duplicate checks and a byte pin before use. Money ranges round outward to cents; incomplete single amounts round down so a lower bound is not overstated.
+Cost estimates cover full 44-case campaigns including known retries, not invoices. Incomplete estimates are marked ≥; missing or changed pinned costs stop the build. Cache scenarios describe estimates, not actual bill bounds. Approved cost aggregates must pass a strict schema, exact model census, duplicate checks and a byte pin before use. Complete money ranges round outward to cents; incomplete estimates round both range endpoints (or a single amount) down so a lower bound is not overstated.
 
 ## Local validation
 

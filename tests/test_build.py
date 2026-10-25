@@ -476,10 +476,6 @@ class BuildTests(unittest.TestCase):
         for name, data in build.outputs().items():
             self.assertEqual((build.ROOT / 'site' / name).read_bytes(), data, name)
 
-if __name__ == '__main__':
-    unittest.main()
-
-
 class ObservationStudyTests(unittest.TestCase):
     def test_immutable_study_link_and_original_grade_correction_note(self):
         page = build.render(build.latest_rows())
@@ -490,3 +486,7 @@ class ObservationStudyTests(unittest.TestCase):
         self.assertIn('omitted stale terminal read-guard faults', page)
         self.assertNotIn('study-url-pending', page)
         self.assertNotIn('pending parent substitution', page)
+
+
+if __name__ == '__main__':
+    unittest.main()

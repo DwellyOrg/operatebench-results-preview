@@ -476,5 +476,17 @@ class BuildTests(unittest.TestCase):
         for name, data in build.outputs().items():
             self.assertEqual((build.ROOT / 'site' / name).read_bytes(), data, name)
 
+class ObservationStudyTests(unittest.TestCase):
+    def test_immutable_study_link_and_original_grade_correction_note(self):
+        page = build.render(build.latest_rows())
+        self.assertIn('href="https://github.com/DwellyOrg/OperateBench/blob/3672fdeb6153e6677f5d36d6e6628f50f2efb1d5/docs/studies/2026-10-observations.md"', page)
+        self.assertIn('Read the descriptive observation study</a>', page)
+        self.assertIn('Displayed original grades are preserved.', page)
+        self.assertIn('separate Compliance-only diagnostic', page)
+        self.assertIn('omitted stale terminal read-guard faults', page)
+        self.assertNotIn('study-url-pending', page)
+        self.assertNotIn('pending parent substitution', page)
+
+
 if __name__ == '__main__':
     unittest.main()

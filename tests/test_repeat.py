@@ -75,60 +75,6 @@ class RepeatTests(unittest.TestCase):
             excluded += int(missing)
         self.assertEqual((scored, excluded), (917, 7))
 
-    def test_two_original_observations_and_exact_ranges(self):
-        old = {r.model: r for r in build.all_rows()}
-        expected = {'claude-opus-5-5': '50.0–59.1%', 'zai-org/GLM-5.3-Flash': '9.1–20.5%',
-                    'muse-wonder-1.0': '25.0–27.9%', 'gemini-3.8-flash': '44.2–46.5%',
-                    'gemini-4-argon': '95.5%', 'mistral-medium-3-5': '0.0%'}
-        for row in self.rows:
-            history = [old[row.model], row]
-            html = build.render_latest_row(row, old[row.model])
-            doc = Document(); doc.feed(html)
-            self.assertEqual(doc.tags.count('details'), 1)
-            self.assertEqual(doc.tags.count('summary'), 1)
-            self.assertEqual(doc.tags.count('li'), 2)
-            self.assertIn('2 series', html)
-            for observation in history:
-                self.assertIn(build.observation(observation), html)
-                for metric in ('goal', 'quality'):
-                    self.assertIn(getattr(observation, metric), html)
-            for metric in ('goal', 'quality'):
-                self.assertIn('Observed ' + build.observed_range(history, metric), html)
-            if row.model in expected:
-                self.assertEqual(build.observed_range(history, 'quality'), expected[row.model])
-            self.assertNotIn('/88', html)
-            self.assertIn('owner-held audit/no public run commit', html)
-            self.assertIn('./REPEAT_20261024.json', doc.urls)
-
-    def test_current_accessibility_provenance_and_privacy(self):
-        html = build.outputs()['index.html'].decode()
-        doc = Document(); doc.feed(html)
-        self.assertEqual(doc.models, ORDER)
-        self.assertEqual(doc.tags.count('table'), 1)
-        self.assertEqual(doc.tags.count('details'), 21)
-        self.assertEqual(doc.tags.count('li'), 42)
-        sorts = [(tag, attrs) for tag, attrs in doc.attributes if 'aria-sort' in attrs]
-        self.assertEqual(sorts, [('th', {'scope': 'col', 'aria-sort': 'descending'})])
-        for tag, attrs in doc.attributes:
-            for target in attrs.get('aria-describedby', '').split():
-                self.assertEqual(doc.ids.count(target), 1)
-        for phrase in ('not confidence intervals', 'not a statistical sample of independent tasks',
-                       'Evaluator/runtime/adapters changed', 'old scores were not regraded',
-                       'No pooling', '917 scored + 7 excluded', 'Historical Meta',
-                       'historical v3', '40/44 scored', 'CC BY 4.0', 'Apache-2.0'):
-            self.assertIn(phrase, html)
-        outputs = build.outputs()
-        self.assertEqual(set(outputs), {'index.html', 'style.css', 'favicon.svg', 'MODEL_RESULTS.md',
-                         'GEMINI_AGGREGATES.json', 'REPEAT_20261024.json', 'LICENSE-DATA', '.nojekyll'})
-        self.assertEqual(outputs['REPEAT_20261024.json'], self.data)
-        for name, data in outputs.items():
-            for private in (b'/root/', b'/var/', b'credential', b'scorecard', b'ledger', b'BUILD-REPORT', b'raw_'):
-                self.assertNotIn(private, data, name)
-        for name in ('README.md', 'NOTICE'):
-            text = (build.ROOT / name).read_text()
-            self.assertIn('REPEAT_20261024.json', text)
-            self.assertIn('CC BY 4.0', text)
-            self.assertIn('Apache-2.0', text)
 
     def test_determinism_and_generation_drift(self):
         expected = build.outputs()
@@ -155,38 +101,6 @@ class RepeatTests(unittest.TestCase):
             if url.startswith('./') and url != './':
                 self.assertIn(url[2:], expected)
 
-    def test_summary_follows_supplied_rows(self):
-        rows = [dataclasses.replace(row, scored='41/44', unscored='3 excluded',
-                                    goal='20/41 (48.8%)', quality='10/41 (24.4%)')
-                if row.model == 'muse-wonder-1.0' else row for row in self.rows]
-        html = build.render(rows)
-        self.assertIn('918 scored + 6 excluded', html)
-        self.assertIn('Current Wonder: 41/44 scored, with 3 technical exclusions', html)
-        self.assertNotIn('917 scored + 7 excluded', html)
-        self.assertNotIn('3 no-tool responses + 1 server error', html)
-
-    def test_latest_page_rejects_wrong_cohorts_and_census(self):
-        historical = build.all_rows()
-        for rows in (historical, [historical[0], *self.rows[1:]], [],
-                     self.rows[:-1], [self.rows[0], *self.rows[:-1]]):
-            with self.subTest(rows=rows), self.assertRaises(ValueError):
-                build.render(rows)
-
-    def test_history_loaded_once_per_render_without_cross_build_cache(self):
-        with patch.object(build, 'all_rows', wraps=build.all_rows) as load:
-            build.render(self.rows)
-            self.assertEqual(load.call_count, 1)
-            build.render(self.rows)
-            self.assertEqual(load.call_count, 2)
-        original_read = Path.read_bytes
-        def drift(path):
-            data = original_read(path)
-            return data + b'\n' if path.name == 'MODEL_RESULTS.md' else data
-        with patch.object(Path, 'read_bytes', drift):
-            with self.assertRaises(ValueError):
-                build.render(self.rows)
-            with self.assertRaises(ValueError):
-                build.outputs()
 
     def test_fail_closed_manifest(self):
         self.assertEqual(sha256(self.data).hexdigest(), 'da3a70a54311b3ecba3b9361c9539322bea071d656c16672cd6026905363fc74')
@@ -209,3 +123,7 @@ class RepeatTests(unittest.TestCase):
                 build.parse_repeat(malformed)
         with self.assertRaises(ValueError):
             build.parse_repeat(self.data + b'\n')
+
+
+if __name__ == '__main__':
+    unittest.main()

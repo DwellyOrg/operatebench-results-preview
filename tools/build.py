@@ -3,7 +3,7 @@ import argparse
 import json
 from collections import Counter
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, ROUND_FLOOR, ROUND_CEILING
 from fractions import Fraction
 from hashlib import sha256
 from html import escape
@@ -109,6 +109,9 @@ def parse_gemini(data):
     # Exact approved schema, types and values: reject extra fields or any drift.
     if json.dumps(value, sort_keys=True) != json.dumps(GEMINI, sort_keys=True):
         raise ValueError('Approved Gemini aggregate schema or figures drift')
+    raw = data.encode() if isinstance(data, str) else data
+    if sha256(raw).hexdigest() != '9f0e424c631886690902f9286b33390cd20832129ac3f92f0578edbeab2e2aae':
+        raise ValueError('Approved Gemini bytes drift')
     return [Row(m['model'], 'gemini', f"{m['scored']}/44",
                 '—' if not m['excluded'] else f"{m['excluded']} excluded",
                 m['goal'], m['quality'], 'not reported') for m in value['models']]
@@ -166,36 +169,6 @@ def latest_rows():
     return parse_repeat((ROOT / 'source/REPEAT_20261024.json').read_bytes())
 
 
-def observed_range(rows, metric):
-    values = [metric_fraction(getattr(r, metric), r.scored) for r in rows]
-    low, high = min(values), max(values)
-    return percent(low) if low == high else percent(low)[:-1] + '–' + percent(high)
-
-
-def observation(row):
-    labels = {key: (title, url) for key, title, url in SERIES.values()}
-    labels['gemini'] = ('Historical Gemini v3 · 2026-10-16 · owner-held audit', './GEMINI_AGGREGATES.json')
-    labels['repeat'] = ('2026-10-24 · owner-held audit/no public run commit', './REPEAT_20261024.json')
-    title, url = labels[row.cohort]
-    if row.cohort == 'sol':
-        title = 'Table · no run commit'
-    prefix = '' if row.cohort in ('repeat', 'gemini') else 'Historical · '
-    return (f'<li><a href="{escape(url)}">{escape(prefix + title)}</a>; '
-            f'scored / assigned {escape(row.scored)}; unscored {escape(row.unscored)}; '
-            f'goal {escape(row.goal)}; all quality checks {escape(row.quality)}; '
-            f'estimated USD {escape(row.cost)}.</li>')
-
-
-def render_latest_row(row, old):
-    series = [old, row]
-    history = '<details><summary>2 series · observation history</summary><ul>' + ''.join(observation(r) for r in series) + '</ul></details>'
-    values = [history, escape(row.scored), escape(row.unscored),
-              escape(row.goal) + '<small>Observed ' + observed_range(series, 'goal') + '</small>',
-              escape(row.quality) + '<small>Observed ' + observed_range(series, 'quality') + '</small>', 'not reported']
-    labels = ['Source / run', 'Scored / assigned', 'Unscored', 'Goal achieved', 'All quality checks', 'Est. USD']
-    return '<tr><th scope="row"><code>' + escape(row.model) + '</code></th>' + ''.join(f'<td data-label="{label}">{value}</td>' for label, value in zip(labels, values)) + '</tr>'
-
-
 def metric_fraction(value, scored):
     """Read the exact scored-case fraction; display percentages never sort rows."""
     scored_match = re.fullmatch(r'(\d+)/44', scored)
@@ -224,57 +197,153 @@ def all_rows():
     return sorted(rows, key=quality_order)
 
 
-def render_row(row):
-    short_labels = {'baseline': 'Baseline', 'sol': 'Table · no run commit', 'meta': 'Meta'}
-    labels_by_run = {key: (short_labels[key], url) for key, title, url in SERIES.values()}
-    labels_by_run['gemini'] = ('Gemini v3 · 2026-10-16 · owner-held audit', '#gemini-context')
-    title, url = labels_by_run[row.cohort]
-    values = (row.scored, row.unscored, row.goal, row.quality, row.cost)
-    labels = ('Scored / assigned', 'Unscored', 'Goal achieved', 'All quality checks', 'Est. USD')
-    return '<tr><th scope="row"><code>' + escape(row.model) + '</code></th>' + f'<td data-label="Source / run"><a href="{escape(url)}">{escape(title)}</a></td>' + ''.join(
+@dataclass(frozen=True)
+class Average:
+    model: str
+    quality: Fraction
+    goal: Fraction
+
+
+def average_order(row):
+    return (-row.quality, -row.goal, row.model.casefold(), row.model)
+
+
+def average_rows(rows=None):
+    old = {r.model: r for r in all_rows()}
+    rows = list(latest_rows() if rows is None else rows)
+    if (len(rows) != 21 or {r.model for r in rows} != set(old)
+            or any(r.cohort != 'repeat' for r in rows)):
+        raise ValueError('Average view requires exact repeat model census')
+    return sorted([Average(r.model, *[
+        (metric_fraction(getattr(old[r.model], metric), old[r.model].scored)
+         + metric_fraction(getattr(r, metric), r.scored)) / 2
+        for metric in ('quality', 'goal')]) for r in rows], key=average_order)
+
+
+COST_DIGEST = '77b64a66a2c7c823dd0053a51f011cdf32905cf1777a3daf439934b3297d4281'
+COST_METHOD = 'arithmetic_mean_per_model'
+
+
+def parse_costs(data, models, digest):
+    if type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest):
+        raise ValueError('Cost source has no valid approved byte pin')
+    raw = data.encode() if isinstance(data, str) else data
+    if sha256(raw).hexdigest() != digest:
+        raise ValueError('Approved cost bytes drift')
+    value = json.loads(data, object_pairs_hook=unique_fields)
+    if (type(value) is not dict or set(value) != {'schema_version', 'currency',
+            'assigned_cases_per_run', 'average_rule', 'assumptions', 'models'}
+            or type(value['schema_version']) is not int or value['schema_version'] != 1
+            or value['currency'] != 'USD' or type(value['assigned_cases_per_run']) is not int
+            or value['assigned_cases_per_run'] != 44 or value['average_rule'] != COST_METHOD
+            or type(value['assumptions']) is not str or not value['assumptions'].strip()
+            or type(value['models']) is not list):
+        raise ValueError('Invalid average cost schema')
+    seen = set()
+    for row in value['models']:
+        if (type(row) is not dict or set(row) != {'model', 'mean_cost_low_usd',
+                'mean_cost_high_usd', 'incomplete_usage', 'pricing_basis'}
+                or type(row['model']) is not str or row['model'] in seen
+                or type(row['incomplete_usage']) is not bool
+                or row['pricing_basis'] not in ('retained_tariff_estimate', 'river_owner_cache_scenarios')):
+            raise ValueError('Invalid or duplicate average cost model')
+        seen.add(row['model'])
+        for key in ('mean_cost_low_usd', 'mean_cost_high_usd'):
+            if type(row[key]) is not str or not re.fullmatch(r'(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?', row[key]):
+                raise ValueError('Cost must be a canonical nonnegative decimal string')
+        if Decimal(row['mean_cost_low_usd']) > Decimal(row['mean_cost_high_usd']):
+            raise ValueError('Reversed cost range')
+    if len(value['models']) != 21 or seen != set(models):
+        raise ValueError('Average cost census drift')
+    return value
+
+
+def load_costs(models):
+    path = ROOT / 'source/AVERAGE_COSTS.json'
+    if not path.exists():
+        raise ValueError('Pinned cost source missing')
+    return parse_costs(path.read_bytes(), models, COST_DIGEST)
+
+
+def money(row):
+    if row is None:
+        raise ValueError('Average cost required')
+    low, high = [Decimal(row[k]) for k in ('mean_cost_low_usd', 'mean_cost_high_usd')]
+    # Incomplete estimates floor both bounds; complete ranges round outward.
+    lo = low.quantize(Decimal('.01'), rounding=ROUND_FLOOR)
+    hi = high.quantize(Decimal('.01'), rounding=ROUND_FLOOR if row['incomplete_usage'] else ROUND_CEILING)
+    if low == high:
+        amount = f'${lo:.2f}' if row['incomplete_usage'] else f'${low.quantize(Decimal(".01"), rounding=ROUND_HALF_UP):.2f}'
+    else:
+        amount = f'${lo:.2f}–${hi:.2f}'
+    return ('≥ ' if row['incomplete_usage'] else '') + amount
+
+
+def render_row(row, cost=None):
+    labels = ('Average quality (%)', 'Average goal achieved (%)', 'Average full-run estimate (USD)')
+    values = (percent(row.quality), percent(row.goal), money(cost))
+    return '<tr><th scope="row"><code>' + escape(row.model) + '</code></th>' + ''.join(
         f'<td data-label="{label}">{escape(value)}</td>' for label, value in zip(labels, values)) + '</tr>'
 
 
-def render_table_rows(rows, renderer=render_row):
-    """Sort and escape table bodies without attaching latest-series context."""
-    return ''.join(renderer(row) for row in sorted(rows, key=quality_order))
+def render_chart(rows):
+    # SVG geometry only: text remains ordinary responsive HTML at every viewport.
+    bars = []
+    for row in rows:
+        width = Decimal(row.quality.numerator) * 100 / row.quality.denominator
+        bars.append('<li class="chart-row"><code>' + escape(row.model) + '</code>'
+            '<span class="bar"><svg viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden="true">'
+            f'<rect width="{width:.10f}" height="12"/></svg></span>'
+            '<strong>' + percent(row.quality) + '</strong></li>')
+    return ('<figure aria-labelledby="chart-title"><figcaption id="chart-title">'
+            'Average strict quality · all reported checks</figcaption>'
+            '<div class="chart-axis" aria-hidden="true"><span>0%</span><span>50%</span><span>100%</span></div>'
+            '<ol class="chart">' + ''.join(bars) + '</ol></figure>')
 
 
-def disposition_count(row, disposition):
-    return sum(int(count) for count, label in re.findall(r'(\d+) (excluded|aborted)', row.unscored)
-               if label == disposition)
-
-
-def render(rows):
-    rows = list(rows)
-    if not rows or any(row.cohort != 'repeat' for row in rows):
-        raise ValueError('Latest page requires repeat rows only')
-    historical = {row.model: row for row in all_rows()}
-    if len(rows) != len(historical) or {row.model for row in rows} != set(historical):
-        raise ValueError('Latest page requires the exact model census')
-    wonder = next(row for row in rows if row.model == 'muse-wonder-1.0')
-    total_scored = sum(int(row.scored.split('/')[0]) for row in rows)
-    total_excluded = sum(disposition_count(row, 'excluded') for row in rows)
-    total_aborted = sum(disposition_count(row, 'aborted') for row in rows)
-    totals = f'{total_scored} scored + {total_excluded} excluded'
-    if total_aborted:
-        totals += f' + {total_aborted} aborted'
-
-    table = '<div class="results-table"><table aria-describedby="comparison spread-context repeat-context meta-context gemini-context"><caption>21 models · latest 2026-10-24 · strict quality ↓</caption><thead><tr><th scope="col">Exact model ID</th><th scope="col">Source / run</th><th scope="col">Scored / assigned</th><th scope="col">Unscored</th><th scope="col">Goal achieved</th><th scope="col" aria-sort="descending">All quality checks ↓</th><th scope="col">Est. USD</th></tr></thead><tbody>' + render_table_rows(rows, lambda row: render_latest_row(row, historical[row.model])) + '</tbody></table></div>'
+def render(rows=None):
+    rows = average_rows(rows)
+    costs = load_costs(r.model for r in rows)
+    by_model = {r['model']: r for r in costs['models']}
+    table = ('<div class="results-table"><table aria-describedby="method cost-note"><caption>21 model averages · quality descending</caption>'
+        '<thead><tr><th scope="col">Model</th><th scope="col" aria-sort="descending">Average quality (%) ↓</th>'
+        '<th scope="col">Average goal achieved (%)</th><th scope="col">Average full-run estimate (USD)</th></tr></thead><tbody>'
+        + ''.join(render_row(r, by_model[r.model]) for r in rows) + '</tbody></table></div>')
+    note = ('Known 44-case campaign estimates including known retries, not invoices. ≥ means an incomplete estimate. '
+            + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
-    return template.replace('{{DOC}}', DOC).replace('{{SHA}}', SHA).replace('{{UPSTREAM}}', UPSTREAM).replace('{{RESULTS}}', table).replace('{{TOTALS}}', totals).replace('{{WONDER_SCORED}}', escape(wonder.scored)).replace('{{WONDER_EXCLUDED}}', str(disposition_count(wonder, 'excluded')))
+    for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
+                       'RESULTS': render_chart(rows) + table, 'COST_NOTE': escape(note)}.items():
+        template = template.replace('{{' + key + '}}', value)
+    return template
+
+
+def aggregate_data(rows, costs):
+    by_model = {r['model']: r for r in costs['models']}
+    return (json.dumps({'schema_version': 1,
+        'method': 'Unweighted mean of two original per-observation rates; exact rational arithmetic.',
+        'cost_assumptions': costs['assumptions'],
+        'models': [dict(model=r.model, average_quality_percent=percent(r.quality),
+            average_goal_achieved_percent=percent(r.goal),
+            quality_rate={'numerator': r.quality.numerator, 'denominator': r.quality.denominator},
+            goal_rate={'numerator': r.goal.numerator, 'denominator': r.goal.denominator},
+            average_full_run_estimate=by_model[r.model]) for r in rows]},
+        indent=2, ensure_ascii=False) + '\n').encode()
 
 
 def outputs():
-    rows = latest_rows()
-    return {'index.html': render(rows).encode(),
+    rows = average_rows()
+    costs = load_costs(r.model for r in rows)
+    return {'index.html': render().encode(),
+            'MODEL_AVERAGES.json': aggregate_data(rows, costs),
             'REPEAT_20261024.json': (ROOT / 'source/REPEAT_20261024.json').read_bytes(),
             'GEMINI_AGGREGATES.json': (ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes(),
             'favicon.svg': (ROOT / 'tools/favicon.svg').read_bytes(),
             'style.css': (ROOT / 'tools/style.css').read_bytes(),
             'MODEL_RESULTS.md': (ROOT / 'source/MODEL_RESULTS.md').read_bytes(),
             'LICENSE-DATA': (ROOT / 'LICENSE-DATA').read_bytes(),
-            '.nojekyll': b''}
+            '.nojekyll': b'',
+            'AVERAGE_COSTS.json': (ROOT / 'source/AVERAGE_COSTS.json').read_bytes()}
 
 
 def main():
@@ -287,12 +356,12 @@ def main():
         actual = {str(p.relative_to(site)) for p in site.rglob('*') if p.is_file()}
         if actual != set(files) or any(not (site / name).exists() or (site / name).read_bytes() != data for name, data in files.items()):
             raise SystemExit('Generated site differs; run python3 tools/build.py')
-        print('OK: pinned historical sources, approved repeat aggregates and generated site match (21 models).')
+        print('OK: pinned historical sources, model averages and generated site match (21 models).')
     else:
         site.mkdir(exist_ok=True)
         for name, data in files.items():
             (site / name).write_bytes(data)
-        print('Built site/ with 21 latest models and two original series per model.')
+        print('Built site/ with 21 model averages.')
 
 if __name__ == '__main__':
     main()

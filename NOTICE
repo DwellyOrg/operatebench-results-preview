@@ -8,10 +8,17 @@ https://github.com/DwellyOrg/OperateBench/blob/963c6b265c71a632d9b333b01e0edcb21
 2 Gemini rows: newly owner-authorized sanitized historical v3 aggregates in
 source/GEMINI_AGGREGATES.json and its site/ copy, not the public source table.
 Gemini audit is owner-held/non-public; no public raw evidence, independent human
-validation or provider attestation. Scored is not success; costs not reported.
+validation or provider attestation. Scored is not success; costs not reported
+in these unchanged historical snapshots.
 21 current rows: approved sanitized 2026-10-24 repeat aggregates in
 source/REPEAT_20261024.json and its generated site/ copy; owner-held audit,
-no public run commit. Costs not reported; historical figures unchanged.
+no public run commit. Costs not reported in this unchanged repeat snapshot;
+historical figures unchanged.
+21 derived model means and cost scenarios: site/MODEL_AVERAGES.json combines
+the historical and repeat observations with newly owner-authorized cost
+aggregates in source/AVERAGE_COSTS.json and its site/AVERAGE_COSTS.json copy.
+This approved cost projection is separate from the unchanged old snapshots;
+no official, independent human or provider attestation is claimed.
 These data and the site results content are CC BY 4.0, owned by
 Prospire Technologies Ltd.
 The website changes presentation only; historical results remain unchanged.

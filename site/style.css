@@ -74,3 +74,19 @@ td:before{content:attr(data-label);color:var(--muted);font-weight:400;max-width:
 tbody tr:nth-child(even){background:#f6f8f4}
 .about{grid-template-columns:1fr;gap:0}
 }
+
+/* Proposed OperateBench initiative: partner-facing explainer */
+.mission{display:grid;grid-template-columns:minmax(0,2fr) minmax(230px,1fr);gap:50px;padding:48px 0 54px;border-top:1px solid var(--line)}
+.mission p,.info-section p{max-width:900px}
+.mission-aside{background:#e9efe9;border:1px solid var(--line);padding:26px;align-self:start;border-radius:8px}
+.mission-aside p{font-size:14px;color:var(--muted)}
+.info-section{padding:50px 0;border-top:1px solid var(--line)}
+.info-section h3{font-size:18px;line-height:1.35;margin:0 0 12px}
+.info-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:28px}
+.info-grid article{padding:24px;border:1px solid var(--line);background:#fff;border-radius:8px}
+.info-grid article p{color:var(--muted);font-size:15px;margin:0}
+.notice{border-left:3px solid var(--accent);padding:13px 18px;background:#eef3ef;color:var(--muted);font-size:14px}
+.milestones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:20px 0}
+.milestones p{display:flex;flex-direction:column;padding:20px;border-top:2px solid var(--accent);gap:9px}
+.milestones span{color:var(--muted);font-size:14px}
+@media(max-width:900px){.mission{grid-template-columns:1fr;gap:16px}.info-grid,.milestones{grid-template-columns:1fr}}

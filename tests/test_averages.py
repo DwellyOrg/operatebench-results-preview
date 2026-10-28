@@ -64,24 +64,33 @@ class AverageTests(unittest.TestCase):
         for rows in ([],base[:-1],[base[0],*base[:-1]],build.all_rows()):
             with self.assertRaises(ValueError): build.average_rows(rows)
 
-    def test_chart_table_census_values_and_clean_document(self):
+    def test_unified_chart_census_values_and_clean_document(self):
         html=build.render(); doc=Document(); doc.feed(html)
         self.assertEqual(doc.models, ORDER)
-        chart=re.findall(r'<li class="chart-row"><code>(.*?)</code>.*?<rect width="(.*?)".*?<strong>(.*?)</strong></li>',html)
-        self.assertEqual([m for m,_,_ in chart], ORDER)
-        for (model,width,label), row in zip(chart,build.average_rows()):
-            self.assertEqual(label,build.percent(row.quality))
-            self.assertLess(abs(Decimal(width)-Decimal(row.quality.numerator)*100/row.quality.denominator),Decimal('0.000000001'))
-            self.assertIn(build.render_row(row, next(c for c in build.load_costs(ORDER)['models'] if c['model'] == row.model)),html)
+        chart=re.findall(r'<li class="chart-row">(.*?)</li>',html)
+        costs={c['model']:c for c in build.load_costs(ORDER)['models']}
+        for item, row in zip(chart,build.average_rows()):
+            self.assertIn('<code>'+row.model+'</code>',item)
+            self.assertEqual(re.findall(r'<strong>(.*?)</strong>',item),
+                             [build.percent(row.quality),build.percent(row.goal),build.money(costs[row.model])])
+            for metric, fraction in [('quality',row.quality),('goal',row.goal)]:
+                width=re.search(r'<rect class="'+metric+r'-fill" width="(.*?)"',item)[1]
+                self.assertLess(abs(Decimal(width)-Decimal(fraction.numerator)*100/fraction.denominator),Decimal('0.000000001'))
+            goal_width=re.search(r'<rect class="goal-fill" width="(.*?)"',item)[1]
+            self.assertIn('x1="'+goal_width+'" x2="'+goal_width+'"',item)
         self.assertEqual(len(chart),21)
+        self.assertNotIn('table',doc.tags)
+        self.assertNotIn('results-table',html)
+        self.assertNotIn('≥',html)
         self.assertIn('width="0.0000000000"',html)
-        self.assertIn('viewBox="0 0 100 12"',html)
+        self.assertIn('width="100.0000000000"',html)
+        self.assertIn('viewBox="0 0 100 16"',html)
         self.assertIn('0%</span><span>50%</span><span>100%',html)
         for word in ('unscored','excluded','aborted','scored','assigned','Observed','<details','2026-10-24','/44','REPEAT_20261024.json','GEMINI_AGGREGATES.json'):
-            self.assertNotIn(word,html.split('<div class="results-table">',1)[1].split('</table>',1)[0])
+            self.assertNotIn(word,html.split('<ol class="chart">',1)[1].split('</ol>',1)[0])
         for tag,attrs in doc.attributes:
             for target in attrs.get('aria-describedby','').split(): self.assertEqual(doc.ids.count(target),1)
-        self.assertEqual([(t,a['aria-sort']) for t,a in doc.attributes if 'aria-sort' in a],[('th','descending')])
+        self.assertIn('sorted by quality',html)
         for url in doc.urls:
             if url.startswith('#'): self.assertEqual(doc.ids.count(url[1:]),1)
         self.assertNotIn('script',doc.tags)
@@ -89,12 +98,13 @@ class AverageTests(unittest.TestCase):
             self.assertIn(text,html)
         css=(build.ROOT/'tools/style.css').read_text()
         self.assertIn('@media(max-width:600px)',css)
-        self.assertIn('.chart-row code{grid-column:1/-1;font-size:13px}',css)
+        self.assertIn('.chart-model{grid-column:1/3;grid-row:1}',css)
 
     def test_escape_and_aggregate_only_download(self):
         row=build.Average('<script>"&',Fraction(0),Fraction(0))
-        for html in (build.render_row(row,fixture()['models'][0]),build.render_chart([row])):
-            self.assertIn('&lt;script&gt;&quot;&amp;',html); self.assertNotIn('<script>',html)
+        costs=fixture(); costs['models'][0]['model']=row.model
+        html=build.render_chart([row],costs)
+        self.assertIn('&lt;script&gt;&quot;&amp;',html); self.assertNotIn('<script>',html)
         data=json.loads(build.outputs()['MODEL_AVERAGES.json'])
         self.assertEqual(len(data['models']),21)
         for row in data['models']:

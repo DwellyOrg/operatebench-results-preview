@@ -1,12 +1,12 @@
 # OperateBench model averages
 
-A static, offline results preview for 21 exact model IDs. The horizontal chart shows average strict quality (passing all original reported checks), on a common 0–100% scale. A compact table also shows average goal achievement and average full-run cost estimates.
+A static, offline results preview for 21 exact model IDs. Each leaderboard row combines average strict quality, average tasks solved (goal achievement), and the average full-run cost estimate. A single horizontal bar overlays strict quality in mint and goal achievement in blue on a common 0–100% scale. Goal achievement includes strict-quality cases; the rates are not added. Exact percentages and one USD estimate appear alongside each bar, with no separate results table.
 
 Each metric is the unweighted arithmetic mean of two original per-observation rates, calculated with exact rational arithmetic. It is not a pooled rate. Rows sort by exact mean quality descending, exact mean goal achievement descending, case-insensitive model ID ascending, then exact model ID ascending. Display percentages round to one decimal place. Heterogeneous settings make these descriptive observations, not a controlled ranking.
 
 The [pinned observation study](https://github.com/DwellyOrg/OperateBench/blob/3672fdeb6153e6677f5d36d6e6628f50f2efb1d5/docs/studies/2026-10-observations.md) explains the original grades and known correction. Original snapshots and reported grades remain unchanged. The new downloadable `MODEL_AVERAGES.json` contains only model averages and aggregate assumptions; legacy data endpoints remain available for compatibility.
 
-Cost estimates cover full 44-case campaigns including known retries, not invoices. Incomplete estimates are marked ≥; missing or changed pinned costs stop the build. Cache scenarios describe estimates, not actual bill bounds. Approved cost aggregates must pass a strict schema, exact model census, duplicate checks and a byte pin before use. Complete money ranges round outward to cents; incomplete estimates round both range endpoints (or a single amount) down so a lower bound is not overstated.
+Cost estimates cover full 44-case campaigns including known retries, not invoices. The chart displays a single upper estimate without range or lower-bound symbols; uncertainty and incomplete usage remain documented in the source JSON and cost note. Missing or changed pinned costs stop the build. Cache scenarios describe estimates, not actual bill bounds. Approved cost aggregates must pass a strict schema, exact model census, duplicate checks and a byte pin before use. Displayed upper estimates round up to cents for complete ranges, down for incomplete usage, and half-up for complete single amounts.
 
 ## Local validation
 
@@ -22,7 +22,7 @@ python tools/build.py
 python tools/build.py --check
 ```
 
-The builder validates original denominators, dispositions, arithmetic, source pins and the full model census internally. Tests cover independently expected means, exact ordering, escaping, chart/table parity, source drift, cost semantics and the publication gate. `--check` rejects modified, missing or extra generated files. The existing workflow publishes only from main with explicit repository approval; this refresh does not change that gate.
+The builder validates original denominators, dispositions, arithmetic, source pins and the full model census internally. Tests cover independently expected means, exact ordering, escaping, unified chart metrics and costs, source drift, cost semantics and the publication gate. `--check` rejects modified, missing or extra generated files. The existing workflow publishes only from main with explicit repository approval; this refresh does not change that gate.
 
 ## Attribution and licenses
 

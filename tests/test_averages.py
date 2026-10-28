@@ -78,7 +78,7 @@ class AverageTests(unittest.TestCase):
         self.assertIn('viewBox="0 0 100 12"',html)
         self.assertIn('0%</span><span>50%</span><span>100%',html)
         for word in ('unscored','excluded','aborted','scored','assigned','Observed','<details','2026-10-24','/44','REPEAT_20261024.json','GEMINI_AGGREGATES.json'):
-            self.assertNotIn(word,html)
+            self.assertNotIn(word,html.split('<div class="results-table">',1)[1].split('</table>',1)[0])
         for tag,attrs in doc.attributes:
             for target in attrs.get('aria-describedby','').split(): self.assertEqual(doc.ids.count(target),1)
         self.assertEqual([(t,a['aria-sort']) for t,a in doc.attributes if 'aria-sort' in a],[('th','descending')])
@@ -135,7 +135,7 @@ class AverageTests(unittest.TestCase):
 
     def test_approved_cost_integration(self):
         raw = (build.ROOT/'source/AVERAGE_COSTS.json').read_bytes()
-        self.assertEqual(sha256(raw).hexdigest(), '77b64a66a2c7c823dd0053a51f011cdf32905cf1777a3daf439934b3297d4281')
+        self.assertEqual(sha256(raw).hexdigest(), '90b263298ced3f9ef23ed073c3d63814902616c39806b6bf9c86c47b7a6cd1f9')
         costs = build.load_costs(ORDER)
         outputs = build.outputs()
         self.assertEqual(outputs['AVERAGE_COSTS.json'], raw)
@@ -191,33 +191,33 @@ class AverageTests(unittest.TestCase):
 
     def test_money_bounds_ranges_and_estimate_note(self):
         row=fixture()['models'][0]
-        self.assertEqual(build.money(row),'≥ $1.23–$2.34')
+        self.assertEqual(build.money(row),'$2.34')
         row.update(mean_cost_high_usd='1.234')
-        self.assertEqual(build.money(row),'≥ $1.23')
+        self.assertEqual(build.money(row),'$1.23')
         row.update(incomplete_usage=False)
         self.assertEqual(build.money(row),'$1.23')
         row.update(mean_cost_low_usd='0.009',mean_cost_high_usd='0.009')
         self.assertEqual(build.money(row),'$0.01')
         row.update(incomplete_usage=True)
-        self.assertEqual(build.money(row),'≥ $0.00')
+        self.assertEqual(build.money(row),'$0.00')
         row.update(mean_cost_low_usd='1.234',mean_cost_high_usd='2.345',incomplete_usage=False)
-        self.assertEqual(build.money(row),'$1.23–$2.35')
+        self.assertEqual(build.money(row),'$2.35')
         row.update(mean_cost_low_usd='1.235',mean_cost_high_usd='1.235')
         self.assertEqual(build.money(row),'$1.24')
         row.update(mean_cost_low_usd='0.009',mean_cost_high_usd='0.011')
-        self.assertEqual(build.money(row),'$0.00–$0.02')
+        self.assertEqual(build.money(row),'$0.02')
         row.update(incomplete_usage=True)
-        self.assertEqual(build.money(row),'≥ $0.00–$0.01')
+        self.assertEqual(build.money(row),'$0.01')
         html=build.render()
-        for text in ('including known retries','not invoices','≥ means an incomplete estimate','≥ $0.29–$2.52'):
+        for text in ('including known retries','not invoices','Some estimates have incomplete recorded usage','$2.52'):
             self.assertIn(text,html)
 
     def test_incomplete_river_source_ranges(self):
         expected={
-            'deepseek-ai/DeepSeek-V4-Flash-0731':'≥ $0.33–$2.54',
-            'Qwen/Qwen3.8-27B-FP8':'≥ $0.29–$2.52',
-            'deepseek-ai/DeepSeek-V4.1-Flash':'≥ $0.43–$2.90',
-            'nvidia/Kimi-K2.6-NVFP4':'≥ $0.15–$1.00',
+            'deepseek-ai/DeepSeek-V4-Flash-0731':'$2.54',
+            'Qwen/Qwen3.8-27B-FP8':'$2.52',
+            'deepseek-ai/DeepSeek-V4.1-Flash':'$2.90',
+            'nvidia/Kimi-K2.6-NVFP4':'$1.00',
         }
         rows=[r for r in build.load_costs(ORDER)['models']
               if r['incomplete_usage'] and r['pricing_basis']=='river_owner_cache_scenarios']

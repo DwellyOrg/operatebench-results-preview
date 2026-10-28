@@ -220,7 +220,7 @@ def average_rows(rows=None):
         for metric in ('quality', 'goal')]) for r in rows], key=average_order)
 
 
-COST_DIGEST = '77b64a66a2c7c823dd0053a51f011cdf32905cf1777a3daf439934b3297d4281'
+COST_DIGEST = '90b263298ced3f9ef23ed073c3d63814902616c39806b6bf9c86c47b7a6cd1f9'
 COST_METHOD = 'arithmetic_mean_per_model'
 
 
@@ -266,17 +266,16 @@ def load_costs(models):
 
 
 def money(row):
+    """Show a single upper estimate; source JSON retains complete ranges."""
     if row is None:
         raise ValueError('Average cost required')
-    low, high = [Decimal(row[k]) for k in ('mean_cost_low_usd', 'mean_cost_high_usd')]
-    # Incomplete estimates floor both bounds; complete ranges round outward.
-    lo = low.quantize(Decimal('.01'), rounding=ROUND_FLOOR)
-    hi = high.quantize(Decimal('.01'), rounding=ROUND_FLOOR if row['incomplete_usage'] else ROUND_CEILING)
-    if low == high:
-        amount = f'${lo:.2f}' if row['incomplete_usage'] else f'${low.quantize(Decimal(".01"), rounding=ROUND_HALF_UP):.2f}'
+    high = Decimal(row['mean_cost_high_usd'])
+    low = Decimal(row['mean_cost_low_usd'])
+    if low == high and not row['incomplete_usage']:
+        value = high.quantize(Decimal('.01'), rounding=ROUND_HALF_UP)
     else:
-        amount = f'${lo:.2f}–${hi:.2f}'
-    return ('≥ ' if row['incomplete_usage'] else '') + amount
+        value = high.quantize(Decimal('.01'), rounding=ROUND_FLOOR if row['incomplete_usage'] else ROUND_CEILING)
+    return f'${value:.2f}'
 
 
 def render_row(row, cost=None):
@@ -309,7 +308,7 @@ def render(rows=None):
         '<thead><tr><th scope="col">Model</th><th scope="col" aria-sort="descending">Average quality (%) ↓</th>'
         '<th scope="col">Average goal achieved (%)</th><th scope="col">Average full-run estimate (USD)</th></tr></thead><tbody>'
         + ''.join(render_row(r, by_model[r.model]) for r in rows) + '</tbody></table></div>')
-    note = ('Known 44-case campaign estimates including known retries, not invoices. ≥ means an incomplete estimate. '
+    note = ('Known 44-case campaign estimates including known retries, not invoices. Some estimates have incomplete recorded usage. '
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,

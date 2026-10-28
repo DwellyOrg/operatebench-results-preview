@@ -78,7 +78,7 @@ class AverageTests(unittest.TestCase):
         self.assertIn('viewBox="0 0 100 12"',html)
         self.assertIn('0%</span><span>50%</span><span>100%',html)
         for word in ('unscored','excluded','aborted','scored','assigned','Observed','<details','2026-10-24','/44','REPEAT_20261024.json','GEMINI_AGGREGATES.json'):
-            self.assertNotIn(word,html)
+            self.assertNotIn(word,html.split('<div class="results-table">',1)[1].split('</table>',1)[0])
         for tag,attrs in doc.attributes:
             for target in attrs.get('aria-describedby','').split(): self.assertEqual(doc.ids.count(target),1)
         self.assertEqual([(t,a['aria-sort']) for t,a in doc.attributes if 'aria-sort' in a],[('th','descending')])

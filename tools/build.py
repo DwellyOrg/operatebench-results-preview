@@ -319,6 +319,7 @@ def render(rows=None):
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
+                       'STYLE_VERSION': sha256((ROOT / 'tools/style.css').read_bytes()).hexdigest()[:12],
                        'RESULTS': render_chart(rows, costs), 'COST_NOTE': escape(note)}.items():
         template = template.replace('{{' + key + '}}', value)
     return template

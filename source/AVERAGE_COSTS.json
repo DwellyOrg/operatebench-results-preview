@@ -98,8 +98,8 @@
     },
     {
       "model": "gpt-6-luna",
-      "mean_cost_low_usd": "130.250705",
-      "mean_cost_high_usd": "130.250705",
+      "mean_cost_low_usd": "1.42",
+      "mean_cost_high_usd": "1.42",
       "incomplete_usage": true,
       "pricing_basis": "retained_tariff_estimate"
     },
@@ -133,8 +133,8 @@
     },
     {
       "model": "mistral-medium-3-5",
-      "mean_cost_low_usd": "166.36980984375",
-      "mean_cost_high_usd": "166.36980984375",
+      "mean_cost_low_usd": "25.77",
+      "mean_cost_high_usd": "25.77",
       "incomplete_usage": true,
       "pricing_basis": "retained_tariff_estimate"
     },

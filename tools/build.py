@@ -278,41 +278,48 @@ def money(row):
     return f'${value:.2f}'
 
 
-def render_row(row, cost=None):
-    labels = ('Average quality (%)', 'Average goal achieved (%)', 'Average full-run estimate (USD)')
-    values = (percent(row.quality), percent(row.goal), money(cost))
-    return '<tr><th scope="row"><code>' + escape(row.model) + '</code></th>' + ''.join(
-        f'<td data-label="{label}">{escape(value)}</td>' for label, value in zip(labels, values)) + '</tr>'
-
-
-def render_chart(rows):
-    # SVG geometry only: text remains ordinary responsive HTML at every viewport.
+def render_chart(rows, costs):
+    # Goal achievement includes strict-quality cases: overlay, never add the rates.
+    by_model = {r['model']: r for r in costs['models']}
     bars = []
-    for row in rows:
-        width = Decimal(row.quality.numerator) * 100 / row.quality.denominator
-        bars.append('<li class="chart-row"><code>' + escape(row.model) + '</code>'
-            '<span class="bar"><svg viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden="true">'
-            f'<rect width="{width:.10f}" height="12"/></svg></span>'
-            '<strong>' + percent(row.quality) + '</strong></li>')
-    return ('<figure aria-labelledby="chart-title"><figcaption id="chart-title">'
-            'Average strict quality · all reported checks</figcaption>'
-            '<div class="chart-axis" aria-hidden="true"><span>0%</span><span>50%</span><span>100%</span></div>'
+    for rank, row in enumerate(rows, 1):
+        quality = Decimal(row.quality.numerator) * 100 / row.quality.denominator
+        goal = Decimal(row.goal.numerator) * 100 / row.goal.denominator
+        bars.append('<li class="chart-row"><div class="chart-model">'
+            f'<span class="chart-rank" aria-hidden="true">{rank:02d}</span>'
+            '<code>' + escape(row.model) + '</code></div>'
+            '<span class="bar" aria-hidden="true"><svg viewBox="0 0 100 16" preserveAspectRatio="none">'
+            f'<rect class="goal-fill" width="{goal:.10f}" height="16"/>'
+            f'<rect class="quality-fill" width="{quality:.10f}" height="16"/>'
+            f'<line class="goal-marker" x1="{goal:.10f}" x2="{goal:.10f}" y1="0" y2="16" '
+            'vector-effect="non-scaling-stroke"/></svg></span>'
+            '<span class="chart-stat quality-stat"><span class="metric-label">Strict quality</span>'
+            '<strong>' + percent(row.quality) + '</strong></span>'
+            '<span class="chart-stat goal-stat"><span class="metric-label">Tasks solved</span>'
+            '<strong>' + percent(row.goal) + '</strong></span>'
+            '<span class="chart-stat chart-cost"><span class="metric-label">Est. run cost</span>'
+            '<strong>' + escape(money(by_model[row.model])) + '</strong></span></li>')
+    return ('<figure class="leaderboard" aria-labelledby="chart-title" aria-describedby="chart-note method cost-note">'
+            '<figcaption id="chart-title">Quality, tasks solved &amp; cost</figcaption>'
+            '<div class="chart-key"><span><i class="quality-key" aria-hidden="true"></i>Strict quality</span>'
+            '<span><i class="goal-key" aria-hidden="true"></i>Tasks solved</span>'
+            '<span class="chart-sort">21 models · sorted by quality</span></div>'
+            '<p id="chart-note">Mint shows cases passing all quality checks. The blue endpoint shows tasks solved '
+            '(goal achieved), including those passing all checks. Both are average percentages across two observations.</p>'
+            '<div class="chart-header" aria-hidden="true"><span>Model</span>'
+            '<span class="chart-axis"><span>0%</span><span>50%</span><span>100%</span></span>'
+            '<span>Quality ↓</span><span>Tasks solved</span><span>Est. run cost</span></div>'
             '<ol class="chart">' + ''.join(bars) + '</ol></figure>')
 
 
 def render(rows=None):
     rows = average_rows(rows)
     costs = load_costs(r.model for r in rows)
-    by_model = {r['model']: r for r in costs['models']}
-    table = ('<div class="results-table"><table aria-describedby="method cost-note"><caption>21 model averages · quality descending</caption>'
-        '<thead><tr><th scope="col">Model</th><th scope="col" aria-sort="descending">Average quality (%) ↓</th>'
-        '<th scope="col">Average goal achieved (%)</th><th scope="col">Average full-run estimate (USD)</th></tr></thead><tbody>'
-        + ''.join(render_row(r, by_model[r.model]) for r in rows) + '</tbody></table></div>')
     note = ('Known 44-case campaign estimates including known retries, not invoices. Some estimates have incomplete recorded usage. '
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
-                       'RESULTS': render_chart(rows) + table, 'COST_NOTE': escape(note)}.items():
+                       'RESULTS': render_chart(rows, costs), 'COST_NOTE': escape(note)}.items():
         template = template.replace('{{' + key + '}}', value)
     return template
 

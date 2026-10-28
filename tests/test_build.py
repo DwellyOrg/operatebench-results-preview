@@ -69,12 +69,12 @@ class Document(HTMLParser):
         self.attributes.append((tag, attrs))
         if "id" in attrs:
             self.ids.append(attrs["id"])
-        if tag == 'th' and attrs.get('scope') == 'row':
+        if tag == 'code':
             self.in_model = True
         if tag == 'a':
             self.urls.append(attrs.get('href', ''))
     def handle_endtag(self, tag):
-        if tag == 'th':
+        if tag == 'code':
             self.in_model = False
     def handle_data(self, data):
         if self.in_model:

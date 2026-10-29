@@ -180,6 +180,87 @@ SELECTED_SIX_ROUTES = {
 }
 
 
+ORIGINAL_SOURCE = 'f3bd45fb0d219929c9415b734dfeb9ef0cb6a5b8'
+CORRECTION_SOURCE = '989c22d9c8342df26eb78eb77f798c9b245abf6e'
+
+
+def validate_recovery_provenance(packet):
+    """Closed aggregate-only contract; counts refer to distinct original cells."""
+    p = packet['provenance']
+    def fields(value, keys):
+        if type(value) is not dict or set(value) != set(keys.split()):
+            raise ValueError('Invalid recovery provenance fields')
+    def counts(value, keys):
+        if any(type(value[k]) is not int or value[k] < 0 for k in keys.split()):
+            raise ValueError('Invalid recovery counts')
+    fields(p, 'original_source_revision correction_source_revision models')
+    if (p['original_source_revision'] != ORIGINAL_SOURCE
+            or p['correction_source_revision'] != CORRECTION_SOURCE
+            or packet['source_revision'] != CORRECTION_SOURCE
+            or type(p['models']) is not list or len(p['models']) != 6):
+        raise ValueError('Invalid recovery sources or census')
+    effective = {m['model']: m for m in packet['models']}
+    seen = set()
+    original_counts = {
+        'gpt-6.1-terra': (44, 0, 0), 'claude-haiku-5-5': (13, 31, 0),
+        'mistral-large-4': (24, 20, 0), 'grok-4.7': (15, 29, 0),
+        'GLM-5.3': (28, 12, 4), 'moonshotai/Kimi-K3': (38, 6, 0)}
+    original_grades = {'gpt-6.1-terra': (44,38), 'claude-haiku-5-5': (0,0),
+        'mistral-large-4': (0,0), 'grok-4.7': (15,5),
+        'GLM-5.3': (25,5), 'moonshotai/Kimi-K3': (16,0)}
+    selected = 0
+    for m in p['models']:
+        fields(m, 'model original_scored original_excluded original_aborted technical_selected distinct_attempted total_attempts terminal_attempts effective_original effective_corrected effective_unresolved attempt_groups')
+        name = m['model']
+        if type(name) is not str or name not in effective or name in seen:
+            raise ValueError('Invalid recovery model census')
+        seen.add(name)
+        counts(m, 'original_scored original_excluded original_aborted technical_selected distinct_attempted total_attempts terminal_attempts effective_original effective_corrected effective_unresolved')
+        if tuple(m[k] for k in ('original_scored', 'original_excluded', 'original_aborted')) != original_counts[name]:
+            raise ValueError('Immutable original counts drift')
+        technical = m['original_excluded'] + m['original_aborted']
+        if (m['original_scored'] + technical != 44
+                or m['technical_selected'] != technical
+                or m['distinct_attempted'] != technical
+                or not 0 <= m['effective_corrected'] <= m['distinct_attempted']
+                or m['total_attempts'] != m['terminal_attempts']
+                or m['terminal_attempts'] < m['distinct_attempted']
+                or m['effective_original'] != m['original_scored']
+                or m['effective_unresolved'] != technical - m['effective_corrected']
+                or effective[name]['scored'] != m['effective_original'] + m['effective_corrected']
+                or effective[name]['excluded'] + effective[name]['aborted'] != m['effective_unresolved']):
+            raise ValueError('Recovery reconciliation failed')
+        goal, reliable = original_grades[name]
+        if not (goal <= effective[name]['goal_completed'] <= goal + m['effective_corrected']
+                and reliable <= effective[name]['reliable'] <= reliable + m['effective_corrected']
+                and effective[name]['reliable'] - reliable <= effective[name]['goal_completed'] - goal):
+            raise ValueError('Immutable original grades drift')
+        selected += technical
+        if type(m['attempt_groups']) is not list:
+            raise ValueError('Invalid attempt-contract groups')
+        groups = set()
+        totals = {'original': 0, 'correction': 0}
+        for g in m['attempt_groups']:
+            fields(g, 'phase source_revision basis registry_mapping_sha256 count')
+            phase = g['phase']
+            if (type(phase) is not str or phase not in totals
+                    or g['source_revision'] not in ((ORIGINAL_SOURCE,) if phase == 'original' else (ORIGINAL_SOURCE, CORRECTION_SOURCE))
+                    or g['basis'] != 'admitted-attempt-contract'
+                    or type(g['registry_mapping_sha256']) is not str
+                    or not re.fullmatch(r'[0-9a-f]{64}', g['registry_mapping_sha256'])
+                    or type(g['count']) is not int or g['count'] <= 0):
+                raise ValueError('Invalid attempt-contract group')
+            key = (phase, g['source_revision'], g['registry_mapping_sha256'])
+            if key in groups:
+                raise ValueError('Duplicate attempt-contract group')
+            groups.add(key)
+            totals[phase] += g['count']
+        if totals != {'original': 44, 'correction': m['terminal_attempts']}:
+            raise ValueError('Attempt-contract counts do not reconcile')
+    if selected != 102 or sum(m['original_scored'] for m in p['models']) != 162:
+        raise ValueError('Recovery scope must cover all 102 technical originals')
+
+
 def parse_selected_six(data, digest):
     if type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest):
         raise ValueError('Selected six requires an approved byte pin')
@@ -189,9 +270,10 @@ def parse_selected_six(data, digest):
     value = json.loads(data, object_pairs_hook=unique_fields)
     def token(v):
         return type(v) is str and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]{0,79}', v)
-    if (type(value) is not dict or set(value) != {'schema_version', 'series', 'date',
-            'conditions', 'source_revision', 'evaluator', 'models'}
-            or type(value['schema_version']) is not int or value['schema_version'] != 1
+    if (type(value) is not dict or set(value) != ({'schema_version', 'series', 'date',
+            'conditions', 'source_revision', 'evaluator', 'models'} |
+            ({'provenance'} if value.get('schema_version') == 2 else set()))
+            or type(value['schema_version']) is not int or value['schema_version'] not in (1, 2)
             or value['series'] != SELECTED_SIX_SERIES
             or type(value['date']) is not str or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value['date'])
             or type(value['conditions']) is not str
@@ -224,6 +306,8 @@ def parse_selected_six(data, digest):
             raise ValueError('Invalid selected six counts, route or cost')
     if seen != set(SELECTED_SIX_ROUTES) or len(value['models']) != 6:
         raise ValueError('Selected six census drift')
+    if value['schema_version'] == 2:
+        validate_recovery_provenance(value)
     return value
 
 
@@ -403,6 +487,8 @@ def render_chart(rows, costs, packet=None):
         chart = chart.replace('Both are average percentages across two observations.',
             'Coverage is total scored/assigned across available observations; percentages remain means '
             'of original scored-case rates.')
+        if packet['schema_version'] == 2:
+            chart = chart.replace('original scored-case rates', 'effective scored-case rates')
     return chart
 
 
@@ -429,6 +515,9 @@ def render(rows=None):
             'the six additional models have one observation each. Rates are conditional on scored coverage; '
             'technical exclusions and interrupted aborts are not quality failures. '
             'Compliance 0.3.0 applies to the additional observations; historical grades remain frozen.')
+        if packet['schema_version'] == 2:
+            template = template.replace('Compliance 0.3.0 applies',
+                'Corrected technical attempts replace only excluded or aborted original cells within the same observation; source revisions and admission registry mappings differ across original and correction attempts. Compliance 0.3.0 applies')
         template = template.replace('cost aggregates</a>,', 'cost aggregates</a> and <a href="./' + SELECTED_SIX_FILE + '">additional model aggregates</a>,')
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
                        'STYLE_VERSION': sha256((ROOT / 'tools/style.css').read_bytes()).hexdigest()[:12],
@@ -451,6 +540,9 @@ def aggregate_data(rows, costs, packet=None):
     if packet:
         value['cost_assumptions'] = SELECTED_COST_SCOPE + costs['assumptions']
         value['method'] = 'Unweighted mean of one or two original per-observation rates; exact rational arithmetic.'
+        if packet['schema_version'] == 2:
+            value['method'] = ('Unweighted mean of one or two per-observation rates; '
+                'technical corrections replace original technical cells; exact rational arithmetic.')
         value['selected_six_provenance'] = dict(packet=SELECTED_SIX_FILE, sha256=SELECTED_SIX_DIGEST,
             **{k: v for k, v in packet.items() if k != 'models'})
         for row in value['models']:

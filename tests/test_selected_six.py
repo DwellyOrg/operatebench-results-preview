@@ -284,7 +284,21 @@ class ActualSelectedSixTests(unittest.TestCase):
             (root/'source'/build.SELECTED_SIX_FILE).unlink()
             with patch.object(build,'ROOT',root), patch.object(build,'SELECTED_SIX_DIGEST',None):
                 files=build.outputs()
-            import subprocess
-            for name,raw in files.items():
-                original=subprocess.check_output(['git','show',f'4b29d28:site/{name}'],cwd=build.ROOT)
-                self.assertEqual(raw,original,name)
+            # Original 21 public bytes from accepted baseline commit
+            # 4b29d28a891173e10293530b24f881e8a2680af8 (site/ tree).
+            # Freeze the entire census and SHA256s so shallow CI needs no history.
+            expected = {
+                '.nojekyll': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+                'AVERAGE_COSTS.json': '90b263298ced3f9ef23ed073c3d63814902616c39806b6bf9c86c47b7a6cd1f9',
+                'GEMINI_AGGREGATES.json': '9f0e424c631886690902f9286b33390cd20832129ac3f92f0578edbeab2e2aae',
+                'LICENSE-DATA': 'd557539df68e771cc1eedcc91d13f70fca930e508d11eedcafa4b15db49e3744',
+                'MODEL_AVERAGES.json': 'b98e74361f8923e709093a4de94a9c46f2d95c978dddc800a801e7a72dd0284c',
+                'MODEL_RESULTS.md': 'e0774775be2e2897f7cbaefc8a0acd24ecf4900e1114c2513ae2e66f04c2141f',
+                'REPEAT_20261024.json': 'da3a70a54311b3ecba3b9361c9539322bea071d656c16672cd6026905363fc74',
+                'favicon.svg': '0a4b7f85f216f0b41105999cace9315e8f64d48a455290d81c2f0de855944620',
+                'index.html': '7f4e7953c74783c0767f7bb8b36280a85155b1ebb9afc4843cebe1029bc8cd45',
+                'style.css': '35344b7bf79357009c94cc2639002423b22705072314bbd20a7cd4bc0a546ddc',
+            }
+            self.assertEqual(set(files), set(expected))
+            for name, raw in files.items():
+                self.assertEqual(sha256(raw).hexdigest(), expected[name], name)

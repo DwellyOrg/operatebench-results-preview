@@ -416,6 +416,8 @@ def render(rows=None):
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
     if packet:
+        note = ('Known estimates and the historical River scenario below apply only to the original 21. '
+                'Costs for the six additional models remain Unknown; no provider charges or invoices are inferred. ' + note)
         template = template.replace('21 models', f'{len(rows)} models').replace('<strong>21</strong>', f'<strong>{len(rows)}</strong>')
         template = template.replace('two original per-observation rates', 'one or two original per-observation rates')
         template = template.replace('with heterogeneous settings:', 'with heterogeneous runtime/evaluator versions and provider settings:')

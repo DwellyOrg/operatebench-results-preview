@@ -163,6 +163,10 @@ class SelectedSixTests(unittest.TestCase):
                     html=files['index.html'].decode()
                     self.assertEqual(html.count('<li class="chart-row">'),27)
                     self.assertEqual(html.count('<strong>Unknown</strong>'),6)
+                    cost_note = html.split('<p id="cost-note">')[1].split('</p>')[0]
+                    self.assertTrue(cost_note.startswith(
+                        'Known estimates and the historical River scenario below apply only to the original 21. '
+                        'Costs for the six additional models remain Unknown; no provider charges or invoices are inferred. '))
                     self.assertIn('>additional model aggregates</a>',html)
                     self.assertNotIn('approved selected six aggregates',html)
                     self.assertNotIn('21 models',html)

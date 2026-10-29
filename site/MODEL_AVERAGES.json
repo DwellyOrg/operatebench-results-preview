@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "method": "Unweighted mean of two original per-observation rates; exact rational arithmetic.",
+  "method": "Unweighted mean of one or two original per-observation rates; exact rational arithmetic.",
   "cost_assumptions": "River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
   "models": [
     {
@@ -21,7 +21,8 @@
         "mean_cost_high_usd": "238.130875",
         "incomplete_usage": true,
         "pricing_basis": "retained_tariff_estimate"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "gemini-4-argon",
@@ -41,7 +42,8 @@
         "mean_cost_high_usd": "94.566744",
         "incomplete_usage": false,
         "pricing_basis": "retained_tariff_estimate"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "gpt-6.1-sol",
@@ -61,7 +63,23 @@
         "mean_cost_high_usd": "52.671586",
         "incomplete_usage": false,
         "pricing_basis": "retained_tariff_estimate"
-      }
+      },
+      "observation_count": 2
+    },
+    {
+      "model": "gpt-6.1-terra",
+      "average_quality_percent": "86.4%",
+      "average_goal_achieved_percent": "100.0%",
+      "quality_rate": {
+        "numerator": 19,
+        "denominator": 22
+      },
+      "goal_rate": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "average_full_run_estimate": null,
+      "observation_count": 1
     },
     {
       "model": "claude-fable-5-1",
@@ -81,7 +99,8 @@
         "mean_cost_high_usd": "192.630185",
         "incomplete_usage": true,
         "pricing_basis": "retained_tariff_estimate"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "claude-opus-5-5",
@@ -101,7 +120,8 @@
         "mean_cost_high_usd": "153.684212",
         "incomplete_usage": false,
         "pricing_basis": "retained_tariff_estimate"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "gemini-3.8-flash",
@@ -121,7 +141,8 @@
         "mean_cost_high_usd": "29.0916735",
         "incomplete_usage": true,
         "pricing_basis": "retained_tariff_estimate"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "gpt-6-sol",
@@ -141,7 +162,23 @@
         "mean_cost_high_usd": "74.553171",
         "incomplete_usage": false,
         "pricing_basis": "retained_tariff_estimate"
-      }
+      },
+      "observation_count": 2
+    },
+    {
+      "model": "grok-4.7",
+      "average_quality_percent": "33.3%",
+      "average_goal_achieved_percent": "100.0%",
+      "quality_rate": {
+        "numerator": 1,
+        "denominator": 3
+      },
+      "goal_rate": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "average_full_run_estimate": null,
+      "observation_count": 1
     },
     {
       "model": "muse-wonder-1.0",
@@ -161,7 +198,23 @@
         "mean_cost_high_usd": "52.067637",
         "incomplete_usage": true,
         "pricing_basis": "retained_tariff_estimate"
-      }
+      },
+      "observation_count": 2
+    },
+    {
+      "model": "GLM-5.3",
+      "average_quality_percent": "17.9%",
+      "average_goal_achieved_percent": "89.3%",
+      "quality_rate": {
+        "numerator": 5,
+        "denominator": 28
+      },
+      "goal_rate": {
+        "numerator": 25,
+        "denominator": 28
+      },
+      "average_full_run_estimate": null,
+      "observation_count": 1
     },
     {
       "model": "zai-org/GLM-5.3-Flash",
@@ -181,7 +234,8 @@
         "mean_cost_high_usd": "1.20868609",
         "incomplete_usage": false,
         "pricing_basis": "river_owner_cache_scenarios"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "nvidia/GLM-5.2-NVFP4-262K",
@@ -201,7 +255,8 @@
         "mean_cost_high_usd": "1.7250116",
         "incomplete_usage": false,
         "pricing_basis": "river_owner_cache_scenarios"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "muse-spark-1.3",
@@ -221,7 +276,8 @@
         "mean_cost_high_usd": "46.821199625",
         "incomplete_usage": false,
         "pricing_basis": "retained_tariff_estimate"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "Qwen/Qwen3.8-27B-FP8",
@@ -241,7 +297,8 @@
         "mean_cost_high_usd": "2.52077547",
         "incomplete_usage": true,
         "pricing_basis": "river_owner_cache_scenarios"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "deepseek-ai/DeepSeek-V4.1-Flash",
@@ -261,7 +318,8 @@
         "mean_cost_high_usd": "2.90048796",
         "incomplete_usage": true,
         "pricing_basis": "river_owner_cache_scenarios"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
@@ -281,7 +339,23 @@
         "mean_cost_high_usd": "2.54243925",
         "incomplete_usage": true,
         "pricing_basis": "river_owner_cache_scenarios"
-      }
+      },
+      "observation_count": 2
+    },
+    {
+      "model": "moonshotai/Kimi-K3",
+      "average_quality_percent": "0.0%",
+      "average_goal_achieved_percent": "42.1%",
+      "quality_rate": {
+        "numerator": 0,
+        "denominator": 1
+      },
+      "goal_rate": {
+        "numerator": 8,
+        "denominator": 19
+      },
+      "average_full_run_estimate": null,
+      "observation_count": 1
     },
     {
       "model": "gpt-6-luna",
@@ -301,7 +375,8 @@
         "mean_cost_high_usd": "1.42",
         "incomplete_usage": true,
         "pricing_basis": "retained_tariff_estimate"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "Qwen/Qwen3.6-35B-A3B-FP8",
@@ -321,7 +396,8 @@
         "mean_cost_high_usd": "1.95993624",
         "incomplete_usage": false,
         "pricing_basis": "river_owner_cache_scenarios"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "nvidia/Kimi-K2.6-NVFP4",
@@ -341,7 +417,8 @@
         "mean_cost_high_usd": "1.00285627",
         "incomplete_usage": true,
         "pricing_basis": "river_owner_cache_scenarios"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "Qwen/Qwen3.5-397B-A17B-FP8",
@@ -361,7 +438,38 @@
         "mean_cost_high_usd": "1.35832249",
         "incomplete_usage": false,
         "pricing_basis": "river_owner_cache_scenarios"
-      }
+      },
+      "observation_count": 2
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "average_quality_percent": "0.0%",
+      "average_goal_achieved_percent": "0.0%",
+      "quality_rate": {
+        "numerator": 0,
+        "denominator": 1
+      },
+      "goal_rate": {
+        "numerator": 0,
+        "denominator": 1
+      },
+      "average_full_run_estimate": null,
+      "observation_count": 1
+    },
+    {
+      "model": "mistral-large-4",
+      "average_quality_percent": "0.0%",
+      "average_goal_achieved_percent": "0.0%",
+      "quality_rate": {
+        "numerator": 0,
+        "denominator": 1
+      },
+      "goal_rate": {
+        "numerator": 0,
+        "denominator": 1
+      },
+      "average_full_run_estimate": null,
+      "observation_count": 1
     },
     {
       "model": "mistral-medium-3-5",
@@ -381,7 +489,8 @@
         "mean_cost_high_usd": "25.77",
         "incomplete_usage": true,
         "pricing_basis": "retained_tariff_estimate"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
@@ -401,7 +510,8 @@
         "mean_cost_high_usd": "2.2550519",
         "incomplete_usage": false,
         "pricing_basis": "river_owner_cache_scenarios"
-      }
+      },
+      "observation_count": 2
     },
     {
       "model": "Qwen/Qwen3.5-9B",
@@ -421,7 +531,18 @@
         "mean_cost_high_usd": "1.26602886",
         "incomplete_usage": false,
         "pricing_basis": "river_owner_cache_scenarios"
-      }
+      },
+      "observation_count": 2
     }
-  ]
+  ],
+  "selected_six_provenance": {
+    "packet": "SELECTED_SIX_20261029.json",
+    "sha256": "271070a082cbf3b868d61e0501203295d7cbaa364e0ac15f8fc98a268e97ca5e",
+    "conditions": "Heterogeneous runtime and evaluator versions and provider settings; historical grades unchanged. Technical and protocol exclusions are not quality failures. River recovery used serial pending cases. Descriptive comparison, not a controlled ranking.",
+    "date": "2026-10-29",
+    "evaluator": "Compliance-0.3.0",
+    "schema_version": 1,
+    "series": "2026-10-29 owner-run selected six",
+    "source_revision": "f3bd45fb0d219929c9415b734dfeb9ef0cb6a5b8"
+  }
 }

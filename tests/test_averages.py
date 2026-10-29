@@ -64,7 +64,8 @@ class AverageTests(unittest.TestCase):
         for rows in ([],base[:-1],[base[0],*base[:-1]],build.all_rows()):
             with self.assertRaises(ValueError): build.average_rows(rows)
 
-    def test_unified_chart_census_values_and_clean_document(self):
+    @patch.object(build, 'load_selected_six', return_value=None)
+    def test_unified_chart_census_values_and_clean_document(self, _selected_six):
         html=build.render(); doc=Document(); doc.feed(html)
         self.assertEqual(doc.models, ORDER)
         chart=re.findall(r'<li class="chart-row">(.*?)</li>',html)
@@ -100,7 +101,8 @@ class AverageTests(unittest.TestCase):
         self.assertIn('@media(max-width:600px)',css)
         self.assertIn('.chart-model{grid-column:1/3;grid-row:1}',css)
 
-    def test_escape_and_aggregate_only_download(self):
+    @patch.object(build, 'load_selected_six', return_value=None)
+    def test_escape_and_aggregate_only_download(self, _selected_six):
         row=build.Average('<script>"&',Fraction(0),Fraction(0))
         costs=fixture(); costs['models'][0]['model']=row.model
         html=build.render_chart([row],costs)
@@ -143,7 +145,8 @@ class AverageTests(unittest.TestCase):
             ('source/REPEAT_20261024.json','da3a70a54311b3ecba3b9361c9539322bea071d656c16672cd6026905363fc74')):
             self.assertEqual(sha256((build.ROOT/path).read_bytes()).hexdigest(),digest)
 
-    def test_approved_cost_integration(self):
+    @patch.object(build, 'load_selected_six', return_value=None)
+    def test_approved_cost_integration(self, _selected_six):
         raw = (build.ROOT/'source/AVERAGE_COSTS.json').read_bytes()
         self.assertEqual(sha256(raw).hexdigest(), '90b263298ced3f9ef23ed073c3d63814902616c39806b6bf9c86c47b7a6cd1f9')
         costs = build.load_costs(ORDER)
@@ -154,7 +157,7 @@ class AverageTests(unittest.TestCase):
                          {r['model']:r for r in costs['models']})
         html = outputs['index.html'].decode()
         notice = (build.ROOT/'NOTICE').read_text()
-        for text in ('21 derived model means and cost scenarios: site/MODEL_AVERAGES.json',
+        for text in ('27 derived model means (21 two-observation means and six one-observation rates): site/MODEL_AVERAGES.json',
                      'source/AVERAGE_COSTS.json and its site/AVERAGE_COSTS.json copy.',
                      'These data and the site results content are CC BY 4.0, owned by',
                      'Prospire Technologies Ltd.',

@@ -10,13 +10,17 @@ source/GEMINI_AGGREGATES.json and its site/ copy, not the public source table.
 Gemini audit is owner-held/non-public; no public raw evidence, independent human
 validation or provider attestation. Scored is not success; costs not reported
 in these unchanged historical snapshots.
-21 current rows: approved sanitized 2026-10-24 repeat aggregates in
+21 historical repeat rows: approved sanitized 2026-10-24 repeat aggregates in
 source/REPEAT_20261024.json and its generated site/ copy; owner-held audit,
 no public run commit. Costs not reported in this unchanged repeat snapshot;
 historical figures unchanged.
-21 derived model means and cost scenarios: site/MODEL_AVERAGES.json combines
+27 derived model means (21 two-observation means and six one-observation rates): site/MODEL_AVERAGES.json combines
 the historical and repeat observations with newly owner-authorized cost
 aggregates in source/AVERAGE_COSTS.json and its site/AVERAGE_COSTS.json copy.
+Six additional owner-authorized sanitized observations are preserved in
+source/SELECTED_SIX_20261029.json and its site/ copy, with public execution
+provenance, Compliance 0.3.0 and actual provider settings. Their costs are unknown;
+technical exclusions and aborts are not quality failures.
 This approved cost projection is separate from the unchanged old snapshots;
 no official, independent human or provider attestation is claimed.
 These data and the site results content are CC BY 4.0, owned by

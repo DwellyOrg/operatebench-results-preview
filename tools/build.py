@@ -406,6 +406,10 @@ def render_chart(rows, costs, packet=None):
     return chart
 
 
+SELECTED_COST_SCOPE = ('Known estimates and the historical River scenario below apply only to the original 21. '
+                       'Costs for the six additional models remain Unknown; no provider charges or invoices are inferred. ')
+
+
 def render(rows=None):
     rows = average_rows(rows)
     costs = load_costs(r.model for r in rows)
@@ -416,8 +420,7 @@ def render(rows=None):
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
     if packet:
-        note = ('Known estimates and the historical River scenario below apply only to the original 21. '
-                'Costs for the six additional models remain Unknown; no provider charges or invoices are inferred. ' + note)
+        note = SELECTED_COST_SCOPE + note
         template = template.replace('21 models', f'{len(rows)} models').replace('<strong>21</strong>', f'<strong>{len(rows)}</strong>')
         template = template.replace('two original per-observation rates', 'one or two original per-observation rates')
         template = template.replace('with heterogeneous settings:', 'with heterogeneous runtime/evaluator versions and provider settings:')
@@ -446,6 +449,7 @@ def aggregate_data(rows, costs, packet=None):
             average_full_run_estimate=(None if packet and r.model in SELECTED_SIX_ROUTES
                                        else by_model[r.model])) for r in rows]}
     if packet:
+        value['cost_assumptions'] = SELECTED_COST_SCOPE + costs['assumptions']
         value['method'] = 'Unweighted mean of one or two original per-observation rates; exact rational arithmetic.'
         value['selected_six_provenance'] = dict(packet=SELECTED_SIX_FILE, sha256=SELECTED_SIX_DIGEST,
             **{k: v for k, v in packet.items() if k != 'models'})

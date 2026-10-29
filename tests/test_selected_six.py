@@ -128,6 +128,8 @@ class SelectedSixTests(unittest.TestCase):
     def test_active_and_gates(self):
         with patch.object(build, 'load_selected_six', return_value=None):
             baseline=build.outputs()
+        self.assertEqual(json.loads(baseline['MODEL_AVERAGES.json'])['cost_assumptions'],
+                         build.load_costs(r.model for r in build.average_rows())['assumptions'])
         old=build.average_rows()
         with TemporaryDirectory() as directory:
             root=Path(directory)
@@ -145,6 +147,7 @@ class SelectedSixTests(unittest.TestCase):
                     build.outputs()
                 with patch.object(build,'SELECTED_SIX_DIGEST',pin):
                     files=build.outputs(); data=json.loads(files['MODEL_AVERAGES.json'])
+                    self.assertEqual(data['cost_assumptions'], build.SELECTED_COST_SCOPE + json.loads(baseline['MODEL_AVERAGES.json'])['cost_assumptions'])
                     rows=data['models']; self.assertEqual(len(rows),27)
                     self.assertEqual(len({r['model'] for r in rows}),27)
                     by_id={r['model']:r for r in rows}

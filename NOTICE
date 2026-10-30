@@ -19,7 +19,10 @@ the historical and repeat observations with newly owner-authorized cost
 aggregates in source/AVERAGE_COSTS.json and its site/AVERAGE_COSTS.json copy.
 Six additional owner-authorized sanitized observations are preserved in
 source/SELECTED_SIX_20261029.json and its site/ copy, with public execution
-provenance, Compliance 0.3.0 and actual provider settings. Their costs are unknown;
+provenance, Compliance 0.3.0 and actual provider settings. Their separate cost estimates in source/SELECTED_SIX_COSTS_20261030.json and its
+site/ copy use official current API tariffs checked on 2026-10-30; five cover
+recorded usage only and are incomplete. All costs are estimates, not invoices.
+Original 21 costs retain historical campaign tariffs and River owner scenarios;
 technical exclusions and aborts are not quality failures.
 This approved cost projection is separate from the unchanged old snapshots;
 no official, independent human or provider attestation is claimed.

@@ -59,6 +59,21 @@ class ChartModelParser(HTMLParser):
 
 
 class SelectedSixTests(unittest.TestCase):
+    def test_public_chart_omits_scored_counts_preserves_metrics_and_order(self):
+        html = build.render()
+        chart = re.findall(r'<li class="chart-row">(.*?)</li>', html)
+        rows = sorted(build.average_rows() + build.selected_averages(build.load_selected_six()),
+                      key=build.average_order)
+        self.assertEqual(len(chart), 27)
+        self.assertEqual(len(rows), 27)
+        for item, row in zip(chart, rows):
+            with self.subTest(model=row.model):
+                self.assertIn('<code>' + row.model + '</code>', item)
+                self.assertEqual(re.findall(r'<strong>(.*?)</strong>', item)[:2],
+                                 [build.percent(row.quality), build.percent(row.goal)])
+                self.assertNotRegex(item.lower(), r'scored|assigned|coverage|\d+/\d+|<small|<details|title=')
+        self.assertNotIn('Coverage is total scored/assigned', html)
+
     def test_current_generated_bytes_and_census(self):
         packet = build.load_selected_six()
         files = build.outputs()
@@ -158,18 +173,17 @@ class SelectedSixTests(unittest.TestCase):
                     for m in fixture()['models']:
                         row=by_id[m['model']]
                         self.assertEqual(row['observation_count'],1)
-                        self.assertIsNone(row['average_full_run_estimate'])
+                        self.assertIsNotNone(row['average_full_run_estimate'])
                         for metric,key in [('quality_rate','reliable'),('goal_rate','goal_completed')]:
                             self.assertEqual(Fraction(**row[metric]),Fraction(m[key],m['scored']))
                     expected=sorted(old+build.selected_averages(fixture()),key=build.average_order)
                     self.assertEqual([r['model'] for r in rows],[r.model for r in expected])
                     html=files['index.html'].decode()
                     self.assertEqual(html.count('<li class="chart-row">'),27)
-                    self.assertEqual(html.count('<strong>Unknown</strong>'),6)
+                    self.assertEqual(html.count('<strong>Unknown</strong>'),0)
                     cost_note = html.split('<p id="cost-note">')[1].split('</p>')[0]
                     self.assertTrue(cost_note.startswith(
-                        'Known estimates and the historical River scenario below apply only to the original 21. '
-                        'Costs for the six additional models remain Unknown; no provider charges or invoices are inferred. '))
+                        build.SELECTED_COST_SCOPE))
                     self.assertIn('>additional model aggregates</a>',html)
                     self.assertNotIn('approved selected six aggregates',html)
                     self.assertNotIn('21 models',html)
@@ -178,28 +192,23 @@ class SelectedSixTests(unittest.TestCase):
                     self.assertIn('heterogeneous runtime/evaluator versions and provider settings',html)
                     chart=html.split('<ol class="chart">')[1].split('</ol>')[0]
                     self.assertEqual(html.count('<ol class="chart">'),1)
-                    labels = re.findall(r'<code>([^<]+)</code><br><small>Scored (\d+)/(\d+)</small>',chart)
-                    self.assertEqual(len(labels),27)
-                    visible = {model:(int(scored),int(assigned)) for model,scored,assigned in labels}
-                    self.assertEqual(len(visible),27)
+                    labels = re.findall(r'<code>([^<]+)</code>',chart)
+                    self.assertEqual(labels, [row.model for row in expected])
+                    self.assertNotRegex(chart.lower(), r'scored|assigned|coverage|\d+/\d+')
                     structure = ChartModelParser()
                     structure.feed(chart)
                     self.assertEqual(len(structure.models),27)
                     for rank, (container, row) in enumerate(zip(structure.models, expected), 1):
-                        scored, assigned = visible[row.model]
                         self.assertEqual(container, ('div', {'class':'chart-model'}, [
                             ('span', {'class':'chart-rank', 'aria-hidden':'true'}, [f'{rank:02d}']),
                             ('span', {}, [
-                                ('code', {}, [row.model]),
-                                ('br', {}, []),
-                                ('small', {}, [f'Scored {scored}/{assigned}'])])]))
+                                ('code', {}, [row.model])])]))
                     originals = {r.model:r for r in build.all_rows()}
                     unequal_rates = 0
                     for repeat in build.latest_rows():
                         original = originals[repeat.model]
                         n1,d1 = map(int,original.scored.split('/'))
                         n2,d2 = map(int,repeat.scored.split('/'))
-                        self.assertEqual(visible[repeat.model],(n1+n2,d1+d2))
                         for metric,key in [('quality','quality_rate'),('goal','goal_rate')]:
                             a = build.metric_fraction(getattr(original,metric),original.scored)
                             b = build.metric_fraction(getattr(repeat,metric),repeat.scored)
@@ -208,12 +217,8 @@ class SelectedSixTests(unittest.TestCase):
                             self.assertEqual(Fraction(**by_id[repeat.model][key]),mean)
                             unequal_rates += mean != pooled
                     self.assertGreater(unequal_rates,0)
-                    for model in fixture()['models']:
-                        self.assertEqual(visible[model['model']],(model['scored'],model['assigned']))
-                    self.assertEqual(visible[fixture()['models'][-1]['model']],(7,44))
                     self.assertIn('<strong>0.0%</strong>',chart)
-                    self.assertIn('Coverage is total scored/assigned across available observations; '
-                                  'percentages remain means of original scored-case rates.',html)
+                    self.assertIn('Both are average percentages across one or two observations.',html)
                     for forbidden in ('badge','observation','synthetic-native'):
                         self.assertNotIn(forbidden,chart)
                     self.assertEqual(data['selected_six_provenance']['sha256'],pin)
@@ -266,7 +271,7 @@ class ActualSelectedSixTests(unittest.TestCase):
             self.assertIsNone(m['cost_usd'])
             row = by_id[m['model']]
             self.assertEqual(row['observation_count'],1)
-            self.assertIsNone(row['average_full_run_estimate'])
+            self.assertIsNotNone(row['average_full_run_estimate'])
             self.assertEqual(Fraction(**row['quality_rate']),Fraction(m['reliable'],m['scored']))
             self.assertEqual(Fraction(**row['goal_rate']),Fraction(m['goal_completed'],m['scored']))
         self.assertEqual(sum(m['scored'] for m in packet['models']),207)
@@ -305,3 +310,72 @@ class ActualSelectedSixTests(unittest.TestCase):
             self.assertEqual(set(files), set(expected))
             for name, raw in files.items():
                 self.assertEqual(sha256(raw).hexdigest(), expected[name], name)
+
+
+class SelectedCostTests(unittest.TestCase):
+    def test_current_cost_intake(self):
+        files = build.outputs()
+        data = json.loads(files['MODEL_AVERAGES.json'])
+        expected = ['$6.11', '$3.88', '$10.37', '$77.66', '$7.82', '$28.98']
+        by_id = {r['model']: r for r in data['models']}
+        for name, price in zip(build.SELECTED_SIX_ROUTES, expected):
+            cost = by_id[name]['average_full_run_estimate']
+            self.assertIsNotNone(cost)
+            self.assertEqual(build.money(cost), price)
+        self.assertEqual(data['selected_six_cost_provenance']['sha256'],
+            '3a04d7ff6caf0edec3c6c71f37119b6f6bb9b1dd07b3a4ed029de47cc15683f9')
+        self.assertEqual(files[build.SELECTED_COST_FILE],
+                         (build.ROOT/'source'/build.SELECTED_COST_FILE).read_bytes())
+
+    def test_selected_cost_schema_and_legacy_isolation(self):
+        value = build.load_selected_costs()
+        def parse(v):
+            raw, pin = encode(v)
+            return build.parse_costs(raw, build.SELECTED_SIX_ROUTES, pin, selected=True)
+        changes = [lambda v: v.update(extra=1), lambda v: v.update(schema_version=True),
+            lambda v: v['models'].pop(), lambda v: v['models'].append(v['models'][0]),
+            lambda v: v['models'][0].update(model='unexpected'),
+            lambda v: v['models'][0].pop('incomplete_usage'),
+            lambda v: v['models'][0].update(incomplete_usage=1),
+            lambda v: v['models'][0].update(pricing_basis='retained_tariff_estimate'),
+            lambda v: v['models'][0].update(mean_cost_high_usd=None),
+            lambda v: v['models'][0].update(mean_cost_high_usd='0'),
+            lambda v: v['models'][0].update(mean_cost_low_usd='01'),
+            lambda v: v['models'][0].update(mean_cost_low_usd='1.0')]
+        for change in changes:
+            mutated=copy.deepcopy(value); change(mutated)
+            with self.subTest(change=change), self.assertRaises(ValueError): parse(mutated)
+        raw,pin=encode(value)
+        duplicate=raw.replace(b'"currency": "USD"', b'"currency": "USD", "currency": "USD"')
+        with self.assertRaises(ValueError):
+            build.parse_costs(duplicate,build.SELECTED_SIX_ROUTES,sha256(duplicate).hexdigest(),selected=True)
+        for digest in (None, True, 'a'*64):
+            with self.assertRaises(ValueError):
+                build.parse_costs(raw,build.SELECTED_SIX_ROUTES,digest,selected=True)
+        with self.assertRaises(ValueError):
+            build.parse_costs(raw,build.SELECTED_SIX_ROUTES,pin)
+        zero=copy.deepcopy(value)
+        zero['models'][0].update(mean_cost_low_usd='0',mean_cost_high_usd='0')
+        self.assertEqual(build.money(parse(zero)['models'][0]),'$0.00')
+        self.assertEqual([m['incomplete_usage'] for m in value['models']], [False]+[True]*5)
+
+    def test_selected_cost_file_gates(self):
+        with TemporaryDirectory() as directory:
+            root=Path(directory)
+            shutil.copytree(build.ROOT/'source',root/'source')
+            shutil.copytree(build.ROOT/'tools',root/'tools')
+            shutil.copy(build.ROOT/'LICENSE-DATA',root/'LICENSE-DATA')
+            path=root/'source'/build.SELECTED_COST_FILE
+            raw=path.read_bytes()
+            with patch.object(build,'ROOT',root):
+                path.unlink()
+                with self.assertRaises(ValueError): build.outputs()
+                path.write_bytes(raw+b' ')
+                with self.assertRaises(ValueError): build.outputs()
+                path.write_bytes(raw)
+                with patch.object(build,'SELECTED_COST_DIGEST',None), self.assertRaises(ValueError):
+                    build.outputs()
+                # Disabling the outcome packet ignores even a malformed successor cost file.
+                path.write_bytes(b'bad')
+                with patch.object(build,'load_selected_six',return_value=None):
+                    self.assertNotIn(build.SELECTED_COST_FILE,build.outputs())

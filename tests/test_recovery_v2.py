@@ -83,7 +83,7 @@ class RecoveryTests(unittest.TestCase):
         p = recovery()
         original = build.average_rows()
         rows = sorted(original + build.selected_averages(p), key=build.average_order)
-        costs = build.load_costs(r.model for r in original)
+        costs = build.combined_costs(build.load_costs(r.model for r in original))
         import json
         exported = json.loads(build.aggregate_data(rows, costs, p))
         self.assertEqual(exported['selected_six_provenance']['provenance'], p['provenance'])
@@ -96,5 +96,5 @@ class RecoveryTests(unittest.TestCase):
         self.assertIn('source revisions and admission registry mappings differ', html)
         for row in exported['models']:
             if row['model'] in build.SELECTED_SIX_ROUTES:
-                self.assertIsNone(row['average_full_run_estimate'])
+                self.assertIsNotNone(row['average_full_run_estimate'])
                 self.assertEqual(row['observation_count'], 1)

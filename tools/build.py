@@ -1,5 +1,6 @@
 """Offline, pinned-source static publisher. Python 3.11+, standard library only."""
 import argparse
+from datetime import date
 import json
 from collections import Counter
 from dataclasses import dataclass
@@ -165,6 +166,165 @@ def parse_repeat(data):
     return sorted(rows, key=quality_order)
 
 
+SELECTED_SIX_DIGEST = 'a5032145578776f88e32d6235849dfb2243afefc4992827c4344bcc34817e432'
+SELECTED_SIX_FILE = 'SELECTED_SIX_20261029.json'
+SELECTED_SIX_SERIES = '2026-10-29 owner-run selected six'
+# Routes qualified for the accepted actual observations.
+SELECTED_SIX_ROUTES = {
+    'gpt-6.1-terra': ('openai', 'responses'),
+    'claude-haiku-5-5': ('anthropic', 'messages'),
+    'mistral-large-4': ('mistral', 'native-chat'),
+    'grok-4.7': ('xai', 'responses'),
+    'GLM-5.3': ('river', 'http'),
+    'moonshotai/Kimi-K3': ('river', 'http'),
+}
+
+
+ORIGINAL_SOURCE = 'f3bd45fb0d219929c9415b734dfeb9ef0cb6a5b8'
+CORRECTION_SOURCE = '989c22d9c8342df26eb78eb77f798c9b245abf6e'
+
+
+def validate_recovery_provenance(packet):
+    """Closed aggregate-only contract; counts refer to distinct original cells."""
+    p = packet['provenance']
+    def fields(value, keys):
+        if type(value) is not dict or set(value) != set(keys.split()):
+            raise ValueError('Invalid recovery provenance fields')
+    def counts(value, keys):
+        if any(type(value[k]) is not int or value[k] < 0 for k in keys.split()):
+            raise ValueError('Invalid recovery counts')
+    fields(p, 'original_source_revision correction_source_revision models')
+    if (p['original_source_revision'] != ORIGINAL_SOURCE
+            or p['correction_source_revision'] != CORRECTION_SOURCE
+            or packet['source_revision'] != CORRECTION_SOURCE
+            or type(p['models']) is not list or len(p['models']) != 6):
+        raise ValueError('Invalid recovery sources or census')
+    effective = {m['model']: m for m in packet['models']}
+    seen = set()
+    original_counts = {
+        'gpt-6.1-terra': (44, 0, 0), 'claude-haiku-5-5': (13, 31, 0),
+        'mistral-large-4': (24, 20, 0), 'grok-4.7': (15, 29, 0),
+        'GLM-5.3': (28, 12, 4), 'moonshotai/Kimi-K3': (38, 6, 0)}
+    original_grades = {'gpt-6.1-terra': (44,38), 'claude-haiku-5-5': (0,0),
+        'mistral-large-4': (0,0), 'grok-4.7': (15,5),
+        'GLM-5.3': (25,5), 'moonshotai/Kimi-K3': (16,0)}
+    selected = 0
+    for m in p['models']:
+        fields(m, 'model original_scored original_excluded original_aborted technical_selected distinct_attempted total_attempts terminal_attempts effective_original effective_corrected effective_unresolved attempt_groups')
+        name = m['model']
+        if type(name) is not str or name not in effective or name in seen:
+            raise ValueError('Invalid recovery model census')
+        seen.add(name)
+        counts(m, 'original_scored original_excluded original_aborted technical_selected distinct_attempted total_attempts terminal_attempts effective_original effective_corrected effective_unresolved')
+        if tuple(m[k] for k in ('original_scored', 'original_excluded', 'original_aborted')) != original_counts[name]:
+            raise ValueError('Immutable original counts drift')
+        technical = m['original_excluded'] + m['original_aborted']
+        if (m['original_scored'] + technical != 44
+                or m['technical_selected'] != technical
+                or m['distinct_attempted'] != technical
+                or not 0 <= m['effective_corrected'] <= m['distinct_attempted']
+                or m['total_attempts'] != m['terminal_attempts']
+                or m['terminal_attempts'] < m['distinct_attempted']
+                or m['effective_original'] != m['original_scored']
+                or m['effective_unresolved'] != technical - m['effective_corrected']
+                or effective[name]['scored'] != m['effective_original'] + m['effective_corrected']
+                or effective[name]['excluded'] + effective[name]['aborted'] != m['effective_unresolved']):
+            raise ValueError('Recovery reconciliation failed')
+        goal, reliable = original_grades[name]
+        if not (goal <= effective[name]['goal_completed'] <= goal + m['effective_corrected']
+                and reliable <= effective[name]['reliable'] <= reliable + m['effective_corrected']
+                and effective[name]['reliable'] - reliable <= effective[name]['goal_completed'] - goal):
+            raise ValueError('Immutable original grades drift')
+        selected += technical
+        if type(m['attempt_groups']) is not list:
+            raise ValueError('Invalid attempt-contract groups')
+        groups = set()
+        totals = {'original': 0, 'correction': 0}
+        for g in m['attempt_groups']:
+            fields(g, 'phase source_revision basis registry_mapping_sha256 count')
+            phase = g['phase']
+            if (type(phase) is not str or phase not in totals
+                    or g['source_revision'] not in ((ORIGINAL_SOURCE,) if phase == 'original' else (ORIGINAL_SOURCE, CORRECTION_SOURCE))
+                    or g['basis'] != 'admitted-attempt-contract'
+                    or type(g['registry_mapping_sha256']) is not str
+                    or not re.fullmatch(r'[0-9a-f]{64}', g['registry_mapping_sha256'])
+                    or type(g['count']) is not int or g['count'] <= 0):
+                raise ValueError('Invalid attempt-contract group')
+            key = (phase, g['source_revision'], g['registry_mapping_sha256'])
+            if key in groups:
+                raise ValueError('Duplicate attempt-contract group')
+            groups.add(key)
+            totals[phase] += g['count']
+        if totals != {'original': 44, 'correction': m['terminal_attempts']}:
+            raise ValueError('Attempt-contract counts do not reconcile')
+    if selected != 102 or sum(m['original_scored'] for m in p['models']) != 162:
+        raise ValueError('Recovery scope must cover all 102 technical originals')
+
+
+def parse_selected_six(data, digest):
+    if type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest):
+        raise ValueError('Selected six requires an approved byte pin')
+    raw = data.encode() if isinstance(data, str) else data
+    if sha256(raw).hexdigest() != digest:
+        raise ValueError('Selected six bytes drift')
+    value = json.loads(data, object_pairs_hook=unique_fields)
+    def token(v):
+        return type(v) is str and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]{0,79}', v)
+    if (type(value) is not dict or set(value) != ({'schema_version', 'series', 'date',
+            'conditions', 'source_revision', 'evaluator', 'models'} |
+            ({'provenance'} if value.get('schema_version') == 2 else set()))
+            or type(value['schema_version']) is not int or value['schema_version'] not in (1, 2)
+            or value['series'] != SELECTED_SIX_SERIES
+            or type(value['date']) is not str or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value['date'])
+            or type(value['conditions']) is not str
+            or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9 ,;().-]{0,299}', value['conditions'])
+            or type(value['source_revision']) is not str
+            or not re.fullmatch(r'[0-9a-f]{40}', value['source_revision'])
+            or not token(value['evaluator']) or type(value['models']) is not list):
+        raise ValueError('Invalid selected six metadata')
+    date.fromisoformat(value['date'])
+    seen = set()
+    for m in value['models']:
+        if (type(m) is not dict or set(m) != {'model', 'assigned', 'scored', 'excluded',
+                'aborted', 'goal_completed', 'reliable', 'observation_count', 'provider',
+                'endpoint', 'wire_model', 'reasoning', 'cost_usd'}
+                or type(m['model']) is not str or m['model'] not in SELECTED_SIX_ROUTES
+                or m['model'] in seen):
+            raise ValueError('Invalid selected six model fields or census')
+        seen.add(m['model'])
+        provider, endpoint = SELECTED_SIX_ROUTES[m['model']]
+        if (any(type(m[k]) is not int for k in ('assigned', 'scored', 'excluded', 'aborted',
+                'goal_completed', 'reliable', 'observation_count'))
+                or m['assigned'] != 44 or m['observation_count'] != 1
+                or not 0 <= m['reliable'] <= m['goal_completed'] <= m['scored'] <= 44
+                or m['scored'] == 0 or min(m['excluded'], m['aborted']) < 0
+                or m['scored'] + m['excluded'] + m['aborted'] != 44
+                or m['cost_usd'] is not None or m['wire_model'] != m['model']
+                or m['provider'] != provider or not token(m['endpoint'])
+                or m['endpoint'] != endpoint
+                or not token(m['reasoning'])):
+            raise ValueError('Invalid selected six counts, route or cost')
+    if seen != set(SELECTED_SIX_ROUTES) or len(value['models']) != 6:
+        raise ValueError('Selected six census drift')
+    if value['schema_version'] == 2:
+        validate_recovery_provenance(value)
+    return value
+
+
+def load_selected_six():
+    path = ROOT / 'source' / SELECTED_SIX_FILE
+    if not path.exists() and SELECTED_SIX_DIGEST is None:
+        return None
+    if not path.exists():
+        raise ValueError('Approved selected six packet missing')
+    return parse_selected_six(path.read_bytes(), SELECTED_SIX_DIGEST)
+
+
+def selected_averages(packet):
+    return [Average(m['model'], Fraction(m['reliable'], m['scored']),
+                    Fraction(m['goal_completed'], m['scored'])) for m in packet['models']]
+
+
 def latest_rows():
     return parse_repeat((ROOT / 'source/REPEAT_20261024.json').read_bytes())
 
@@ -278,16 +438,28 @@ def money(row):
     return f'${value:.2f}'
 
 
-def render_chart(rows, costs):
+def render_chart(rows, costs, packet=None):
     # Goal achievement includes strict-quality cases: overlay, never add the rates.
     by_model = {r['model']: r for r in costs['models']}
+    coverage = {}
+    if packet:
+        for observation in all_rows() + latest_rows():
+            scored, assigned = map(int, observation.scored.split('/'))
+            previous = coverage.get(observation.model, (0, 0))
+            coverage[observation.model] = (previous[0] + scored, previous[1] + assigned)
+        coverage.update({m['model']: (m['scored'], m['assigned']) for m in packet['models']})
     bars = []
     for rank, row in enumerate(rows, 1):
         quality = Decimal(row.quality.numerator) * 100 / row.quality.denominator
         goal = Decimal(row.goal.numerator) * 100 / row.goal.denominator
+        coverage_line = (f'<br><small>Scored {coverage[row.model][0]}/{coverage[row.model][1]}</small>'
+                         if packet else '')
+        label = '<code>' + escape(row.model) + '</code>' + coverage_line
+        if packet:
+            label = '<span>' + label + '</span>'
         bars.append('<li class="chart-row"><div class="chart-model">'
             f'<span class="chart-rank" aria-hidden="true">{rank:02d}</span>'
-            '<code>' + escape(row.model) + '</code></div>'
+            + label + '</div>'
             '<span class="bar" aria-hidden="true"><svg viewBox="0 0 100 16" preserveAspectRatio="none">'
             f'<rect class="goal-fill" width="{goal:.10f}" height="16"/>'
             f'<rect class="quality-fill" width="{quality:.10f}" height="16"/>'
@@ -298,12 +470,12 @@ def render_chart(rows, costs):
             '<span class="chart-stat goal-stat"><span class="metric-label">Tasks solved</span>'
             '<strong>' + percent(row.goal) + '</strong></span>'
             '<span class="chart-stat chart-cost"><span class="metric-label">Est. run cost</span>'
-            '<strong>' + escape(money(by_model[row.model])) + '</strong></span></li>')
-    return ('<figure class="leaderboard" aria-labelledby="chart-title" aria-describedby="chart-note method cost-note">'
+            '<strong>' + escape('Unknown' if packet and row.model in SELECTED_SIX_ROUTES else money(by_model[row.model])) + '</strong></span></li>')
+    chart = ('<figure class="leaderboard" aria-labelledby="chart-title" aria-describedby="chart-note method cost-note">'
             '<figcaption id="chart-title">Quality, tasks solved &amp; cost</figcaption>'
             '<div class="chart-key"><span><i class="quality-key" aria-hidden="true"></i>Strict quality</span>'
             '<span><i class="goal-key" aria-hidden="true"></i>Tasks solved</span>'
-            '<span class="chart-sort">21 models · sorted by quality</span></div>'
+            f'<span class="chart-sort">{len(rows)} models · sorted by quality</span></div>'
             '<p id="chart-note">Mint shows cases passing all quality checks. The blue endpoint shows tasks solved '
             '(goal achieved), including those passing all checks. Both are average percentages across two observations.</p>'
             '<div class="chart-header" aria-hidden="true"><span>Model</span>'
@@ -311,38 +483,81 @@ def render_chart(rows, costs):
             '<span>Quality ↓</span><span>Tasks solved</span><span>Est. run cost</span></div>'
             '<ol class="chart">' + ''.join(bars) + '</ol></figure>')
 
+    if packet:
+        chart = chart.replace('Both are average percentages across two observations.',
+            'Coverage is total scored/assigned across available observations; percentages remain means '
+            'of original scored-case rates.')
+        if packet['schema_version'] == 2:
+            chart = chart.replace('original scored-case rates', 'effective scored-case rates')
+    return chart
+
+
+SELECTED_COST_SCOPE = ('Known estimates and the historical River scenario below apply only to the original 21. '
+                       'Costs for the six additional models remain Unknown; no provider charges or invoices are inferred. ')
+
 
 def render(rows=None):
     rows = average_rows(rows)
     costs = load_costs(r.model for r in rows)
+    packet = load_selected_six()
+    if packet:
+        rows = sorted(rows + selected_averages(packet), key=average_order)
     note = ('Known 44-case campaign estimates including known retries, not invoices. Some estimates have incomplete recorded usage. '
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
+    if packet:
+        note = SELECTED_COST_SCOPE + note
+        template = template.replace('21 models', f'{len(rows)} models').replace('<strong>21</strong>', f'<strong>{len(rows)}</strong>')
+        template = template.replace('two original per-observation rates', 'one or two original per-observation rates')
+        template = template.replace('with heterogeneous settings:', 'with heterogeneous runtime/evaluator versions and provider settings:')
+        template = template.replace('descriptive, not a controlled ranking.',
+            'descriptive, not a controlled ranking. For the original 21, two-rate means are retained; '
+            'the six additional models have one observation each. Rates are conditional on scored coverage; '
+            'technical exclusions and interrupted aborts are not quality failures. '
+            'Compliance 0.3.0 applies to the additional observations; historical grades remain frozen.')
+        if packet['schema_version'] == 2:
+            template = template.replace('Compliance 0.3.0 applies',
+                'Corrected technical attempts replace only excluded or aborted original cells within the same observation; source revisions and admission registry mappings differ across original and correction attempts. Compliance 0.3.0 applies')
+        template = template.replace('cost aggregates</a>,', 'cost aggregates</a> and <a href="./' + SELECTED_SIX_FILE + '">additional model aggregates</a>,')
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
                        'STYLE_VERSION': sha256((ROOT / 'tools/style.css').read_bytes()).hexdigest()[:12],
-                       'RESULTS': render_chart(rows, costs), 'COST_NOTE': escape(note)}.items():
+                       'RESULTS': render_chart(rows, costs, packet), 'COST_NOTE': escape(note)}.items():
         template = template.replace('{{' + key + '}}', value)
     return template
 
 
-def aggregate_data(rows, costs):
+def aggregate_data(rows, costs, packet=None):
     by_model = {r['model']: r for r in costs['models']}
-    return (json.dumps({'schema_version': 1,
+    value = {'schema_version': 1,
         'method': 'Unweighted mean of two original per-observation rates; exact rational arithmetic.',
         'cost_assumptions': costs['assumptions'],
         'models': [dict(model=r.model, average_quality_percent=percent(r.quality),
             average_goal_achieved_percent=percent(r.goal),
             quality_rate={'numerator': r.quality.numerator, 'denominator': r.quality.denominator},
             goal_rate={'numerator': r.goal.numerator, 'denominator': r.goal.denominator},
-            average_full_run_estimate=by_model[r.model]) for r in rows]},
-        indent=2, ensure_ascii=False) + '\n').encode()
+            average_full_run_estimate=(None if packet and r.model in SELECTED_SIX_ROUTES
+                                       else by_model[r.model])) for r in rows]}
+    if packet:
+        value['cost_assumptions'] = SELECTED_COST_SCOPE + costs['assumptions']
+        value['method'] = 'Unweighted mean of one or two original per-observation rates; exact rational arithmetic.'
+        if packet['schema_version'] == 2:
+            value['method'] = ('Unweighted mean of one or two per-observation rates; '
+                'technical corrections replace original technical cells; exact rational arithmetic.')
+        value['selected_six_provenance'] = dict(packet=SELECTED_SIX_FILE, sha256=SELECTED_SIX_DIGEST,
+            **{k: v for k, v in packet.items() if k != 'models'})
+        for row in value['models']:
+            row['observation_count'] = 1 if row['model'] in SELECTED_SIX_ROUTES else 2
+    return (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode()
 
 
 def outputs():
     rows = average_rows()
     costs = load_costs(r.model for r in rows)
-    return {'index.html': render().encode(),
-            'MODEL_AVERAGES.json': aggregate_data(rows, costs),
+    packet = load_selected_six()
+    if packet:
+        rows = sorted(rows + selected_averages(packet), key=average_order)
+    files = {'index.html': render().encode(),
+            'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet),
             'REPEAT_20261024.json': (ROOT / 'source/REPEAT_20261024.json').read_bytes(),
             'GEMINI_AGGREGATES.json': (ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes(),
             'favicon.svg': (ROOT / 'tools/favicon.svg').read_bytes(),
@@ -351,6 +566,12 @@ def outputs():
             'LICENSE-DATA': (ROOT / 'LICENSE-DATA').read_bytes(),
             '.nojekyll': b'',
             'AVERAGE_COSTS.json': (ROOT / 'source/AVERAGE_COSTS.json').read_bytes()}
+
+    if packet:
+        raw = (ROOT / 'source' / SELECTED_SIX_FILE).read_bytes()
+        parse_selected_six(raw, SELECTED_SIX_DIGEST)
+        files[SELECTED_SIX_FILE] = raw
+    return files
 
 
 def main():
@@ -363,12 +584,12 @@ def main():
         actual = {str(p.relative_to(site)) for p in site.rglob('*') if p.is_file()}
         if actual != set(files) or any(not (site / name).exists() or (site / name).read_bytes() != data for name, data in files.items()):
             raise SystemExit('Generated site differs; run python3 tools/build.py')
-        print('OK: pinned historical sources, model averages and generated site match (21 models).')
+        print(f'OK: pinned sources, model averages and generated site match ({len(json.loads(files["MODEL_AVERAGES.json"])["models"])} models).')
     else:
         site.mkdir(exist_ok=True)
         for name, data in files.items():
             (site / name).write_bytes(data)
-        print('Built site/ with 21 model averages.')
+        print(f'Built site/ with {len(json.loads(files["MODEL_AVERAGES.json"])["models"])} model averages.')
 
 if __name__ == '__main__':
     main()

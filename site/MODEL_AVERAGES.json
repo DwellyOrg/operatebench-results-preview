@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "method": "Unweighted mean of one or two per-observation rates; technical corrections replace original technical cells; exact rational arithmetic.",
-  "cost_assumptions": "Known estimates and the historical River scenario below apply only to the original 21. Costs for the six additional models remain Unknown; no provider charges or invoices are inferred. River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
+  "cost_assumptions": "The original 21 retain historical campaign tariffs and River owner scenarios, including known retries. Some estimates have incomplete recorded usage. The six additional estimates use official current API rates as of 2026-10-30; gpt-6.1-terra covers complete recorded usage. claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. All costs are estimates, not invoices. For the original 21 only: River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
   "models": [
     {
       "model": "gpt-6-astra",
@@ -78,7 +78,13 @@
         "numerator": 1,
         "denominator": 1
       },
-      "average_full_run_estimate": null,
+      "average_full_run_estimate": {
+        "model": "gpt-6.1-terra",
+        "mean_cost_low_usd": "6.108786",
+        "mean_cost_high_usd": "6.108786",
+        "incomplete_usage": false,
+        "pricing_basis": "official_current_tariff_estimate"
+      },
       "observation_count": 1
     },
     {
@@ -177,7 +183,13 @@
         "numerator": 1,
         "denominator": 1
       },
-      "average_full_run_estimate": null,
+      "average_full_run_estimate": {
+        "model": "grok-4.7",
+        "mean_cost_low_usd": "77.661408",
+        "mean_cost_high_usd": "77.661408",
+        "incomplete_usage": true,
+        "pricing_basis": "official_current_tariff_estimate"
+      },
       "observation_count": 1
     },
     {
@@ -213,7 +225,13 @@
         "numerator": 8,
         "denominator": 9
       },
-      "average_full_run_estimate": null,
+      "average_full_run_estimate": {
+        "model": "GLM-5.3",
+        "mean_cost_low_usd": "7.820048928",
+        "mean_cost_high_usd": "7.820048928",
+        "incomplete_usage": true,
+        "pricing_basis": "official_current_tariff_estimate"
+      },
       "observation_count": 1
     },
     {
@@ -354,7 +372,13 @@
         "numerator": 19,
         "denominator": 44
       },
-      "average_full_run_estimate": null,
+      "average_full_run_estimate": {
+        "model": "moonshotai/Kimi-K3",
+        "mean_cost_low_usd": "28.9800438",
+        "mean_cost_high_usd": "28.9800438",
+        "incomplete_usage": true,
+        "pricing_basis": "official_current_tariff_estimate"
+      },
       "observation_count": 1
     },
     {
@@ -453,7 +477,13 @@
         "numerator": 0,
         "denominator": 1
       },
-      "average_full_run_estimate": null,
+      "average_full_run_estimate": {
+        "model": "claude-haiku-5-5",
+        "mean_cost_low_usd": "3.8893672",
+        "mean_cost_high_usd": "3.8893672",
+        "incomplete_usage": true,
+        "pricing_basis": "official_current_tariff_estimate"
+      },
       "observation_count": 1
     },
     {
@@ -468,7 +498,13 @@
         "numerator": 0,
         "denominator": 1
       },
-      "average_full_run_estimate": null,
+      "average_full_run_estimate": {
+        "model": "mistral-large-4",
+        "mean_cost_low_usd": "10.3779949",
+        "mean_cost_high_usd": "10.3779949",
+        "incomplete_usage": true,
+        "pricing_basis": "official_current_tariff_estimate"
+      },
       "observation_count": 1
     },
     {
@@ -535,6 +571,10 @@
       "observation_count": 2
     }
   ],
+  "selected_six_cost_provenance": {
+    "packet": "SELECTED_SIX_COSTS_20261030.json",
+    "sha256": "3a04d7ff6caf0edec3c6c71f37119b6f6bb9b1dd07b3a4ed029de47cc15683f9"
+  },
   "selected_six_provenance": {
     "packet": "SELECTED_SIX_20261029.json",
     "sha256": "a5032145578776f88e32d6235849dfb2243afefc4992827c4344bcc34817e432",

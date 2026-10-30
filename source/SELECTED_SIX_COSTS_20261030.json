@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "currency": "USD",
+  "assigned_cases_per_run": 44,
+  "average_rule": "arithmetic_mean_per_model",
+  "assumptions": "For the six added models only: one main 44-case observation per model, including original and technical-correction attempts with retained provider-reported usage; earlier disjoint qualification canaries are excluded. USD estimates use current official standard API tariffs checked on 2026-10-30, not invoices or verified historical billing. Cached reads and writes use their documented replacement rates; reasoning already included in output is not added twice. GPT-6.1 Terra uses the documented default 30-minute cache-write rate; no request selected another lifetime. Haiku, Mistral, Grok, GLM and Kimi have missing usage: displayed values cover recorded usage only and exclude unknown liabilities, reservation bounds and unverified fees. Provider-reported usage from failed attempts is included once, including Grok reports not admitted by the benchmark; Grok token estimates match returned provider cost ticks. River preview rates may change and separately unpublished fees remain unknown. Official sources: https://developers.openai.com/api/docs/models/gpt-6.1-terra ; https://developers.openai.com/api/docs/guides/prompt-caching ; https://platform.claude.com/docs/en/about-claude/pricing ; https://docs.x.ai/developers/pricing ; https://docs.x.ai/developers/cost-tracking ; https://docs.mistral.ai/models/mistral-large-4-0.md ; https://console.river.ai/api/public/pricing ; https://docs.river.ai/guides/inference-models.md .",
+  "models": [
+    {
+      "model": "gpt-6.1-terra",
+      "mean_cost_low_usd": "6.108786",
+      "mean_cost_high_usd": "6.108786",
+      "incomplete_usage": false,
+      "pricing_basis": "official_current_tariff_estimate"
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "mean_cost_low_usd": "3.8893672",
+      "mean_cost_high_usd": "3.8893672",
+      "incomplete_usage": true,
+      "pricing_basis": "official_current_tariff_estimate"
+    },
+    {
+      "model": "mistral-large-4",
+      "mean_cost_low_usd": "10.3779949",
+      "mean_cost_high_usd": "10.3779949",
+      "incomplete_usage": true,
+      "pricing_basis": "official_current_tariff_estimate"
+    },
+    {
+      "model": "grok-4.7",
+      "mean_cost_low_usd": "77.661408",
+      "mean_cost_high_usd": "77.661408",
+      "incomplete_usage": true,
+      "pricing_basis": "official_current_tariff_estimate"
+    },
+    {
+      "model": "GLM-5.3",
+      "mean_cost_low_usd": "7.820048928",
+      "mean_cost_high_usd": "7.820048928",
+      "incomplete_usage": true,
+      "pricing_basis": "official_current_tariff_estimate"
+    },
+    {
+      "model": "moonshotai/Kimi-K3",
+      "mean_cost_low_usd": "28.9800438",
+      "mean_cost_high_usd": "28.9800438",
+      "incomplete_usage": true,
+      "pricing_basis": "official_current_tariff_estimate"
+    }
+  ]
+}

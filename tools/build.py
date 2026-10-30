@@ -384,7 +384,11 @@ COST_DIGEST = '90b263298ced3f9ef23ed073c3d63814902616c39806b6bf9c86c47b7a6cd1f9'
 COST_METHOD = 'arithmetic_mean_per_model'
 
 
-def parse_costs(data, models, digest):
+SELECTED_COST_FILE = 'SELECTED_SIX_COSTS_20261030.json'
+SELECTED_COST_DIGEST = '3a04d7ff6caf0edec3c6c71f37119b6f6bb9b1dd07b3a4ed029de47cc15683f9'
+
+
+def parse_costs(data, models, digest, *, selected=False):
     if type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest):
         raise ValueError('Cost source has no valid approved byte pin')
     raw = data.encode() if isinstance(data, str) else data
@@ -405,7 +409,8 @@ def parse_costs(data, models, digest):
                 'mean_cost_high_usd', 'incomplete_usage', 'pricing_basis'}
                 or type(row['model']) is not str or row['model'] in seen
                 or type(row['incomplete_usage']) is not bool
-                or row['pricing_basis'] not in ('retained_tariff_estimate', 'river_owner_cache_scenarios')):
+                or row['pricing_basis'] not in (('official_current_tariff_estimate',) if selected else
+                    ('retained_tariff_estimate', 'river_owner_cache_scenarios'))):
             raise ValueError('Invalid or duplicate average cost model')
         seen.add(row['model'])
         for key in ('mean_cost_low_usd', 'mean_cost_high_usd'):
@@ -413,7 +418,8 @@ def parse_costs(data, models, digest):
                 raise ValueError('Cost must be a canonical nonnegative decimal string')
         if Decimal(row['mean_cost_low_usd']) > Decimal(row['mean_cost_high_usd']):
             raise ValueError('Reversed cost range')
-    if len(value['models']) != 21 or seen != set(models):
+    if (len(value['models']) != (6 if selected else 21) or seen != set(models)
+            or (selected and seen != set(SELECTED_SIX_ROUTES))):
         raise ValueError('Average cost census drift')
     return value
 
@@ -423,6 +429,18 @@ def load_costs(models):
     if not path.exists():
         raise ValueError('Pinned cost source missing')
     return parse_costs(path.read_bytes(), models, COST_DIGEST)
+
+
+def load_selected_costs():
+    path = ROOT / 'source' / SELECTED_COST_FILE
+    if not path.exists():
+        raise ValueError('Pinned selected cost source missing')
+    return parse_costs(path.read_bytes(), SELECTED_SIX_ROUTES, SELECTED_COST_DIGEST, selected=True)
+
+
+def combined_costs(costs):
+    added = load_selected_costs()
+    return dict(costs, models=costs['models'] + added['models'])
 
 
 def money(row):
@@ -441,20 +459,11 @@ def money(row):
 def render_chart(rows, costs, packet=None):
     # Goal achievement includes strict-quality cases: overlay, never add the rates.
     by_model = {r['model']: r for r in costs['models']}
-    coverage = {}
-    if packet:
-        for observation in all_rows() + latest_rows():
-            scored, assigned = map(int, observation.scored.split('/'))
-            previous = coverage.get(observation.model, (0, 0))
-            coverage[observation.model] = (previous[0] + scored, previous[1] + assigned)
-        coverage.update({m['model']: (m['scored'], m['assigned']) for m in packet['models']})
     bars = []
     for rank, row in enumerate(rows, 1):
         quality = Decimal(row.quality.numerator) * 100 / row.quality.denominator
         goal = Decimal(row.goal.numerator) * 100 / row.goal.denominator
-        coverage_line = (f'<br><small>Scored {coverage[row.model][0]}/{coverage[row.model][1]}</small>'
-                         if packet else '')
-        label = '<code>' + escape(row.model) + '</code>' + coverage_line
+        label = '<code>' + escape(row.model) + '</code>'
         if packet:
             label = '<span>' + label + '</span>'
         bars.append('<li class="chart-row"><div class="chart-model">'
@@ -470,7 +479,7 @@ def render_chart(rows, costs, packet=None):
             '<span class="chart-stat goal-stat"><span class="metric-label">Tasks solved</span>'
             '<strong>' + percent(row.goal) + '</strong></span>'
             '<span class="chart-stat chart-cost"><span class="metric-label">Est. run cost</span>'
-            '<strong>' + escape('Unknown' if packet and row.model in SELECTED_SIX_ROUTES else money(by_model[row.model])) + '</strong></span></li>')
+            '<strong>' + escape(money(by_model[row.model])) + '</strong></span></li>')
     chart = ('<figure class="leaderboard" aria-labelledby="chart-title" aria-describedby="chart-note method cost-note">'
             '<figcaption id="chart-title">Quality, tasks solved &amp; cost</figcaption>'
             '<div class="chart-key"><span><i class="quality-key" aria-hidden="true"></i>Strict quality</span>'
@@ -485,15 +494,17 @@ def render_chart(rows, costs, packet=None):
 
     if packet:
         chart = chart.replace('Both are average percentages across two observations.',
-            'Coverage is total scored/assigned across available observations; percentages remain means '
-            'of original scored-case rates.')
-        if packet['schema_version'] == 2:
-            chart = chart.replace('original scored-case rates', 'effective scored-case rates')
+            'Both are average percentages across one or two observations.')
     return chart
 
 
-SELECTED_COST_SCOPE = ('Known estimates and the historical River scenario below apply only to the original 21. '
-                       'Costs for the six additional models remain Unknown; no provider charges or invoices are inferred. ')
+SELECTED_COST_SCOPE = ('The original 21 retain historical campaign tariffs and River owner scenarios, '
+                       'including known retries. Some estimates have incomplete recorded usage. '
+                       'The six additional estimates use official current API rates as of 2026-10-30; '
+                       'gpt-6.1-terra covers complete recorded usage. '
+                       'claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, '
+                       'moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. '
+                       'All costs are estimates, not invoices. For the original 21 only: ')
 
 
 def render(rows=None):
@@ -501,12 +512,13 @@ def render(rows=None):
     costs = load_costs(r.model for r in rows)
     packet = load_selected_six()
     if packet:
+        costs = combined_costs(costs)
         rows = sorted(rows + selected_averages(packet), key=average_order)
     note = ('Known 44-case campaign estimates including known retries, not invoices. Some estimates have incomplete recorded usage. '
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
     if packet:
-        note = SELECTED_COST_SCOPE + note
+        note = SELECTED_COST_SCOPE + costs['assumptions']
         template = template.replace('21 models', f'{len(rows)} models').replace('<strong>21</strong>', f'<strong>{len(rows)}</strong>')
         template = template.replace('two original per-observation rates', 'one or two original per-observation rates')
         template = template.replace('with heterogeneous settings:', 'with heterogeneous runtime/evaluator versions and provider settings:')
@@ -519,6 +531,8 @@ def render(rows=None):
             template = template.replace('Compliance 0.3.0 applies',
                 'Corrected technical attempts replace only excluded or aborted original cells within the same observation; source revisions and admission registry mappings differ across original and correction attempts. Compliance 0.3.0 applies')
         template = template.replace('cost aggregates</a>,', 'cost aggregates</a> and <a href="./' + SELECTED_SIX_FILE + '">additional model aggregates</a>,')
+    if packet:
+        template = template.replace('additional model aggregates</a>,', 'additional model aggregates</a> and <a href="./' + SELECTED_COST_FILE + '">current cost aggregates and assumptions</a>,')
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
                        'STYLE_VERSION': sha256((ROOT / 'tools/style.css').read_bytes()).hexdigest()[:12],
                        'RESULTS': render_chart(rows, costs, packet), 'COST_NOTE': escape(note)}.items():
@@ -535,14 +549,14 @@ def aggregate_data(rows, costs, packet=None):
             average_goal_achieved_percent=percent(r.goal),
             quality_rate={'numerator': r.quality.numerator, 'denominator': r.quality.denominator},
             goal_rate={'numerator': r.goal.numerator, 'denominator': r.goal.denominator},
-            average_full_run_estimate=(None if packet and r.model in SELECTED_SIX_ROUTES
-                                       else by_model[r.model])) for r in rows]}
+            average_full_run_estimate=by_model[r.model]) for r in rows]}
     if packet:
         value['cost_assumptions'] = SELECTED_COST_SCOPE + costs['assumptions']
         value['method'] = 'Unweighted mean of one or two original per-observation rates; exact rational arithmetic.'
         if packet['schema_version'] == 2:
             value['method'] = ('Unweighted mean of one or two per-observation rates; '
                 'technical corrections replace original technical cells; exact rational arithmetic.')
+        value['selected_six_cost_provenance'] = dict(packet=SELECTED_COST_FILE, sha256=SELECTED_COST_DIGEST)
         value['selected_six_provenance'] = dict(packet=SELECTED_SIX_FILE, sha256=SELECTED_SIX_DIGEST,
             **{k: v for k, v in packet.items() if k != 'models'})
         for row in value['models']:
@@ -555,6 +569,7 @@ def outputs():
     costs = load_costs(r.model for r in rows)
     packet = load_selected_six()
     if packet:
+        costs = combined_costs(costs)
         rows = sorted(rows + selected_averages(packet), key=average_order)
     files = {'index.html': render().encode(),
             'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet),
@@ -571,6 +586,9 @@ def outputs():
         raw = (ROOT / 'source' / SELECTED_SIX_FILE).read_bytes()
         parse_selected_six(raw, SELECTED_SIX_DIGEST)
         files[SELECTED_SIX_FILE] = raw
+        cost_raw = (ROOT / 'source' / SELECTED_COST_FILE).read_bytes()
+        parse_costs(cost_raw, SELECTED_SIX_ROUTES, SELECTED_COST_DIGEST, selected=True)
+        files[SELECTED_COST_FILE] = cost_raw
     return files
 
 

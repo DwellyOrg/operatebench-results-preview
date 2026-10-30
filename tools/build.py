@@ -498,9 +498,13 @@ def render_chart(rows, costs, packet=None):
     return chart
 
 
-SELECTED_COST_SCOPE = ('The original 21 retain historical campaign tariffs and River owner scenarios. '
+SELECTED_COST_SCOPE = ('The original 21 retain historical campaign tariffs and River owner scenarios, '
+                       'including known retries. Some estimates have incomplete recorded usage. '
                        'The six additional estimates use official current API rates as of 2026-10-30; '
-                       'five cover recorded usage only and are incomplete. All costs are estimates, not invoices. ')
+                       'gpt-6.1-terra covers complete recorded usage. '
+                       'claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, '
+                       'moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. '
+                       'All costs are estimates, not invoices. For the original 21 only: ')
 
 
 def render(rows=None):
@@ -514,7 +518,7 @@ def render(rows=None):
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
     if packet:
-        note = SELECTED_COST_SCOPE + note
+        note = SELECTED_COST_SCOPE + costs['assumptions']
         template = template.replace('21 models', f'{len(rows)} models').replace('<strong>21</strong>', f'<strong>{len(rows)}</strong>')
         template = template.replace('two original per-observation rates', 'one or two original per-observation rates')
         template = template.replace('with heterogeneous settings:', 'with heterogeneous runtime/evaluator versions and provider settings:')

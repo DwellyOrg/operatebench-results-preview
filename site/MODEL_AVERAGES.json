@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "method": "Unweighted mean of one or two per-observation rates; technical corrections replace original technical cells; exact rational arithmetic.",
-  "cost_assumptions": "The original 21 retain historical campaign tariffs and River owner scenarios. The six additional estimates use official current API rates as of 2026-10-30; five cover recorded usage only and are incomplete. All costs are estimates, not invoices. River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
+  "cost_assumptions": "The original 21 retain historical campaign tariffs and River owner scenarios, including known retries. Some estimates have incomplete recorded usage. The six additional estimates use official current API rates as of 2026-10-30; gpt-6.1-terra covers complete recorded usage. claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. All costs are estimates, not invoices. For the original 21 only: River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
   "models": [
     {
       "model": "gpt-6-astra",

@@ -4,6 +4,7 @@ import json
 import re
 from fractions import Fraction
 from hashlib import sha256
+from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 import shutil
@@ -313,6 +314,18 @@ class ActualSelectedSixTests(unittest.TestCase):
 
 
 class SelectedCostTests(unittest.TestCase):
+    def test_combined_cost_note_scopes_legacy_and_names_incomplete_models(self):
+        files = build.outputs()
+        note = unescape(files['index.html'].decode().split('<p id="cost-note">')[1].split('</p>')[0])
+        assumptions = build.load_costs(r.model for r in build.average_rows())['assumptions']
+        self.assertEqual(note, json.loads(files['MODEL_AVERAGES.json'])['cost_assumptions'])
+        self.assertTrue(note.endswith('For the original 21 only: ' + assumptions))
+        self.assertNotIn('Known 44-case campaign', note)
+        self.assertEqual(note.count('not invoices'), 1)
+        self.assertIn('gpt-6.1-terra covers complete recorded usage.', note)
+        self.assertIn('claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, '
+                      'moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded.', note)
+
     def test_current_cost_intake(self):
         files = build.outputs()
         data = json.loads(files['MODEL_AVERAGES.json'])

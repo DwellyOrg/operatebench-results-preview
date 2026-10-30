@@ -229,8 +229,8 @@ class ActualSelectedSixTests(unittest.TestCase):
         packet = build.load_selected_six()
         self.assertIsNotNone(packet)
         self.assertEqual(build.SELECTED_SIX_DIGEST,
-            '271070a082cbf3b868d61e0501203295d7cbaa364e0ac15f8fc98a268e97ca5e')
-        self.assertEqual(packet['source_revision'], 'f3bd45fb0d219929c9415b734dfeb9ef0cb6a5b8')
+            'a5032145578776f88e32d6235849dfb2243afefc4992827c4344bcc34817e432')
+        self.assertEqual(packet['source_revision'], build.CORRECTION_SOURCE)
         self.assertEqual(packet['evaluator'], 'Compliance-0.3.0')
         self.assertEqual(packet['date'], '2026-10-29')
         self.assertEqual(packet['conditions'],
@@ -247,11 +247,11 @@ class ActualSelectedSixTests(unittest.TestCase):
         }
         expected = {
             'gpt-6.1-terra': (44,44,38,0,0,'none'),
-            'claude-haiku-5-5': (13,0,0,31,0,'adaptive-low'),
+            'claude-haiku-5-5': (44,0,0,0,0,'adaptive-low'),
             'mistral-large-4': (24,0,0,20,0,'none'),
             'grok-4.7': (15,15,5,29,0,'low'),
-            'GLM-5.3': (28,25,5,12,4,'low'),
-            'moonshotai/Kimi-K3': (38,16,0,6,0,'none'),
+            'GLM-5.3': (36,32,6,8,0,'low'),
+            'moonshotai/Kimi-K3': (44,19,0,0,0,'none'),
         }
         rows = json.loads(build.outputs()['MODEL_AVERAGES.json'])['models']
         by_id = {r['model']:r for r in rows}
@@ -269,9 +269,9 @@ class ActualSelectedSixTests(unittest.TestCase):
             self.assertIsNone(row['average_full_run_estimate'])
             self.assertEqual(Fraction(**row['quality_rate']),Fraction(m['reliable'],m['scored']))
             self.assertEqual(Fraction(**row['goal_rate']),Fraction(m['goal_completed'],m['scored']))
-        self.assertEqual(sum(m['scored'] for m in packet['models']),162)
-        self.assertEqual(sum(m['excluded'] for m in packet['models']),98)
-        self.assertEqual(sum(m['aborted'] for m in packet['models']),4)
+        self.assertEqual(sum(m['scored'] for m in packet['models']),207)
+        self.assertEqual(sum(m['excluded'] for m in packet['models']),57)
+        self.assertEqual(sum(m['aborted'] for m in packet['models']),0)
         for endpoint in ('chat','native-chat','unqualified'):
             value = copy.deepcopy(packet)
             next(m for m in value['models'] if m['model']=='grok-4.7')['endpoint']=endpoint

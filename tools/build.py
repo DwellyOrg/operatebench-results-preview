@@ -166,7 +166,7 @@ def parse_repeat(data):
     return sorted(rows, key=quality_order)
 
 
-SELECTED_SIX_DIGEST = '271070a082cbf3b868d61e0501203295d7cbaa364e0ac15f8fc98a268e97ca5e'
+SELECTED_SIX_DIGEST = 'a5032145578776f88e32d6235849dfb2243afefc4992827c4344bcc34817e432'
 SELECTED_SIX_FILE = 'SELECTED_SIX_20261029.json'
 SELECTED_SIX_SERIES = '2026-10-29 owner-run selected six'
 # Routes qualified for the accepted actual observations.

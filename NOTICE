@@ -14,7 +14,7 @@ in these unchanged historical snapshots.
 source/REPEAT_20261024.json and its generated site/ copy; owner-held audit,
 no public run commit. Costs not reported in this unchanged repeat snapshot;
 historical figures unchanged.
-27 derived model means (21 two-observation means and six one-observation rates): site/MODEL_AVERAGES.json combines
+28 derived model means (22 two-observation means and six one-observation rates): site/MODEL_AVERAGES.json combines
 the historical and repeat observations with newly owner-authorized cost
 aggregates in source/AVERAGE_COSTS.json and its site/AVERAGE_COSTS.json copy.
 Six additional owner-authorized sanitized observations are preserved in
@@ -31,3 +31,12 @@ Prospire Technologies Ltd.
 The website changes presentation only; historical results remain unchanged.
 No independent authorship of the original results is claimed.
 Site code is Apache-2.0. See LICENSE and LICENSE-DATA.
+
+The approved NOVEMBER_20261105.json preserves both claude-sonnet-5-5 observations
+from public source revision 213d672ddaa8ec296c6b0bbe7b9c8e01785e020e
+(https://github.com/DwellyOrg/OperateBench/tree/213d672ddaa8ec296c6b0bbe7b9c8e01785e020e).
+The 28 models comprise 22 two-observation means and six single-observation rates.
+Sonnet means are strict quality 39/88, goal achievement 81/88 and USD 20.309033
+per 44-case observation, using complete reported usage at official current tariffs.
+Stand-alone diagnostics are excluded from row costs and quality. These are
+estimates, not invoices; no independent human validation is claimed.

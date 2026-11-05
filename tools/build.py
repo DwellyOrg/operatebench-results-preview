@@ -4,7 +4,7 @@ from datetime import date
 import json
 from collections import Counter
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP, ROUND_FLOOR, ROUND_CEILING
+from decimal import Decimal, ROUND_HALF_UP, ROUND_FLOOR, ROUND_CEILING, localcontext
 from fractions import Fraction
 from hashlib import sha256
 from html import escape
@@ -320,6 +320,86 @@ def load_selected_six():
     return parse_selected_six(path.read_bytes(), SELECTED_SIX_DIGEST)
 
 
+NOVEMBER_FILE = 'NOVEMBER_20261105.json'
+NOVEMBER_DIGEST = 'a46e76a1a1bc12135bf38aa9bcc4b5a995c05bcc0fde2dd9462b9d5ded371af8'
+NOVEMBER_MODEL = 'claude-sonnet-5-5'
+NOVEMBER_COST_SCOPE = ('November costs average reported-usage estimates for one 44-case observation '
+    'at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. ')
+
+
+def parse_november(data, digest):
+    if type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest):
+        raise ValueError('November requires an approved byte pin')
+    raw = data.encode() if isinstance(data, str) else data
+    if sha256(raw).hexdigest() != digest:
+        raise ValueError('November bytes drift')
+    value = json.loads(raw, object_pairs_hook=unique_fields)
+    literals = dict(schema_version=1, model=NOVEMBER_MODEL, provider='anthropic',
+        endpoint='messages', reasoning='between_tools-low', currency='USD',
+        pricing_basis='official_current_tariff_estimate', case_set='same-44-cases')
+    if (type(value) is not dict or set(value) != set(literals) | {
+            'source_revision', 'date', 'observations'}
+            or any(type(value[k]) is not type(v) or value[k] != v for k, v in literals.items())
+            or type(value['source_revision']) is not str
+            or not re.fullmatch(r'[0-9a-f]{40}', value['source_revision'])
+            or type(value['date']) is not str
+            or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value['date'])
+            or type(value['observations']) is not list or len(value['observations']) != 2):
+        raise ValueError('Invalid November metadata or observation census')
+    date.fromisoformat(value['date'])
+    seen = set()
+    counts = ('assigned', 'scored', 'excluded', 'aborted', 'goal_completed', 'reliable')
+    for obs in value['observations']:
+        if (type(obs) is not dict or set(obs) != set(counts) | {
+                'id', 'estimated_cost_low_usd', 'estimated_cost_high_usd', 'incomplete_usage'}
+                or type(obs['id']) is not str
+                or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]{0,79}', obs['id'])
+                or obs['id'] in seen or any(type(obs[k]) is not int for k in counts)
+                or obs['assigned'] != 44 or not 0 < obs['scored'] <= 44
+                or not 0 <= obs['reliable'] <= obs['goal_completed'] <= obs['scored']
+                or min(obs['excluded'], obs['aborted']) < 0
+                or obs['scored'] + obs['excluded'] + obs['aborted'] != 44
+                or type(obs['incomplete_usage']) is not bool):
+            raise ValueError('Invalid November observation or coverage')
+        seen.add(obs['id'])
+        for key in ('estimated_cost_low_usd', 'estimated_cost_high_usd'):
+            if (type(obs[key]) is not str
+                    or not re.fullmatch(r'(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?', obs[key])):
+                raise ValueError('November cost must be a canonical nonnegative decimal string')
+        if Decimal(obs['estimated_cost_low_usd']) > Decimal(obs['estimated_cost_high_usd']):
+            raise ValueError('Reversed November cost range')
+    return value
+
+
+def load_november():
+    path = ROOT / 'source' / NOVEMBER_FILE
+    if not path.exists() and NOVEMBER_DIGEST is None:
+        return None
+    if not path.exists():
+        raise ValueError('Approved November packet missing')
+    return parse_november(path.read_bytes(), NOVEMBER_DIGEST)
+
+
+def november_average(packet):
+    return Average(NOVEMBER_MODEL, *[
+        sum((Fraction(o[k], o['scored']) for o in packet['observations']), Fraction()) / 2
+        for k in ('reliable', 'goal_completed')])
+
+
+def november_cost(packet):
+    result = dict(model=NOVEMBER_MODEL, pricing_basis=packet['pricing_basis'],
+        incomplete_usage=any(o['incomplete_usage'] for o in packet['observations']))
+    for bound in ('low', 'high'):
+        values = [o[f'estimated_cost_{bound}_usd'] for o in packet['observations']]
+        # Keep decimal means exact even beyond the ambient Decimal precision.
+        with localcontext() as context:
+            context.prec = sum(len(v) for v in values) + 4
+            mean = sum(map(Decimal, values)) / 2
+            text = format(mean, 'f')
+            result[f'mean_cost_{bound}_usd'] = text.rstrip('0').rstrip('.') if '.' in text else text
+    return result
+
+
 def selected_averages(packet):
     return [Average(m['model'], Fraction(m['reliable'], m['scored']),
                     Fraction(m['goal_completed'], m['scored'])) for m in packet['models']]
@@ -514,6 +594,10 @@ def render(rows=None):
     if packet:
         costs = combined_costs(costs)
         rows = sorted(rows + selected_averages(packet), key=average_order)
+    november = load_november()
+    if november:
+        rows = sorted(rows + [november_average(november)], key=average_order)
+        costs = dict(costs, models=costs['models'] + [november_cost(november)])
     note = ('Known 44-case campaign estimates including known retries, not invoices. Some estimates have incomplete recorded usage. '
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
@@ -533,6 +617,10 @@ def render(rows=None):
         template = template.replace('cost aggregates</a>,', 'cost aggregates</a> and <a href="./' + SELECTED_SIX_FILE + '">additional model aggregates</a>,')
     if packet:
         template = template.replace('additional model aggregates</a>,', 'additional model aggregates</a> and <a href="./' + SELECTED_COST_FILE + '">current cost aggregates and assumptions</a>,')
+    if november:
+        note = NOVEMBER_COST_SCOPE + note
+        template = template.replace('21 models', f'{len(rows)} models').replace('<strong>21</strong>', f'<strong>{len(rows)}</strong>')
+        template = template.replace('<footer>', '<footer><p><a href="./' + NOVEMBER_FILE + '">November observation aggregates</a></p>')
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
                        'STYLE_VERSION': sha256((ROOT / 'tools/style.css').read_bytes()).hexdigest()[:12],
                        'RESULTS': render_chart(rows, costs, packet), 'COST_NOTE': escape(note)}.items():
@@ -540,7 +628,7 @@ def render(rows=None):
     return template
 
 
-def aggregate_data(rows, costs, packet=None):
+def aggregate_data(rows, costs, packet=None, november=None):
     by_model = {r['model']: r for r in costs['models']}
     value = {'schema_version': 1,
         'method': 'Unweighted mean of two original per-observation rates; exact rational arithmetic.',
@@ -561,6 +649,13 @@ def aggregate_data(rows, costs, packet=None):
             **{k: v for k, v in packet.items() if k != 'models'})
         for row in value['models']:
             row['observation_count'] = 1 if row['model'] in SELECTED_SIX_ROUTES else 2
+    if november:
+        value['cost_assumptions'] = NOVEMBER_COST_SCOPE + value['cost_assumptions']
+        value['november_provenance'] = dict(packet=NOVEMBER_FILE, sha256=NOVEMBER_DIGEST,
+            **{k: v for k, v in november.items() if k != 'observations'})
+        for row in value['models']:
+            if row['model'] == NOVEMBER_MODEL:
+                row['observation_count'] = 2
     return (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode()
 
 
@@ -571,8 +666,12 @@ def outputs():
     if packet:
         costs = combined_costs(costs)
         rows = sorted(rows + selected_averages(packet), key=average_order)
+    november = load_november()
+    if november:
+        rows = sorted(rows + [november_average(november)], key=average_order)
+        costs = dict(costs, models=costs['models'] + [november_cost(november)])
     files = {'index.html': render().encode(),
-            'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet),
+            'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet, november),
             'REPEAT_20261024.json': (ROOT / 'source/REPEAT_20261024.json').read_bytes(),
             'GEMINI_AGGREGATES.json': (ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes(),
             'favicon.svg': (ROOT / 'tools/favicon.svg').read_bytes(),
@@ -589,6 +688,10 @@ def outputs():
         cost_raw = (ROOT / 'source' / SELECTED_COST_FILE).read_bytes()
         parse_costs(cost_raw, SELECTED_SIX_ROUTES, SELECTED_COST_DIGEST, selected=True)
         files[SELECTED_COST_FILE] = cost_raw
+    if november:
+        raw = (ROOT / 'source' / NOVEMBER_FILE).read_bytes()
+        parse_november(raw, NOVEMBER_DIGEST)
+        files[NOVEMBER_FILE] = raw
     return files
 
 

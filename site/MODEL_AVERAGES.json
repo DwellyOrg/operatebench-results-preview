@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "method": "Unweighted mean of one or two per-observation rates; technical corrections replace original technical cells; exact rational arithmetic.",
-  "cost_assumptions": "The original 21 retain historical campaign tariffs and River owner scenarios, including known retries. Some estimates have incomplete recorded usage. The six additional estimates use official current API rates as of 2026-10-30; gpt-6.1-terra covers complete recorded usage. claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. All costs are estimates, not invoices. For the original 21 only: River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
+  "cost_assumptions": "November costs average reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. The original 21 retain historical campaign tariffs and River owner scenarios, including known retries. Some estimates have incomplete recorded usage. The six additional estimates use official current API rates as of 2026-10-30; gpt-6.1-terra covers complete recorded usage. claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. All costs are estimates, not invoices. For the original 21 only: River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
   "models": [
     {
       "model": "gpt-6-astra",
@@ -147,6 +147,27 @@
         "mean_cost_high_usd": "29.0916735",
         "incomplete_usage": true,
         "pricing_basis": "retained_tariff_estimate"
+      },
+      "observation_count": 2
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "average_quality_percent": "44.3%",
+      "average_goal_achieved_percent": "92.0%",
+      "quality_rate": {
+        "numerator": 39,
+        "denominator": 88
+      },
+      "goal_rate": {
+        "numerator": 81,
+        "denominator": 88
+      },
+      "average_full_run_estimate": {
+        "model": "claude-sonnet-5-5",
+        "pricing_basis": "official_current_tariff_estimate",
+        "incomplete_usage": false,
+        "mean_cost_low_usd": "20.309033",
+        "mean_cost_high_usd": "20.309033"
       },
       "observation_count": 2
     },
@@ -771,5 +792,19 @@
     "schema_version": 2,
     "series": "2026-10-29 owner-run selected six",
     "source_revision": "989c22d9c8342df26eb78eb77f798c9b245abf6e"
+  },
+  "november_provenance": {
+    "packet": "NOVEMBER_20261105.json",
+    "sha256": "a46e76a1a1bc12135bf38aa9bcc4b5a995c05bcc0fde2dd9462b9d5ded371af8",
+    "schema_version": 1,
+    "model": "claude-sonnet-5-5",
+    "provider": "anthropic",
+    "endpoint": "messages",
+    "reasoning": "between_tools-low",
+    "currency": "USD",
+    "pricing_basis": "official_current_tariff_estimate",
+    "case_set": "same-44-cases",
+    "source_revision": "213d672ddaa8ec296c6b0bbe7b9c8e01785e020e",
+    "date": "2026-11-05"
   }
 }

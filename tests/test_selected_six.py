@@ -63,10 +63,10 @@ class SelectedSixTests(unittest.TestCase):
     def test_public_chart_omits_scored_counts_preserves_metrics_and_order(self):
         html = build.render()
         chart = re.findall(r'<li class="chart-row">(.*?)</li>', html)
-        rows = sorted(build.average_rows() + build.selected_averages(build.load_selected_six()),
+        rows = sorted(build.average_rows() + build.selected_averages(build.load_selected_six()) + [build.november_average(build.load_november())],
                       key=build.average_order)
-        self.assertEqual(len(chart), 27)
-        self.assertEqual(len(rows), 27)
+        self.assertEqual(len(chart), 28)
+        self.assertEqual(len(rows), 28)
         for item, row in zip(chart, rows):
             with self.subTest(model=row.model):
                 self.assertIn('<code>' + row.model + '</code>', item)
@@ -89,6 +89,8 @@ class SelectedSixTests(unittest.TestCase):
             self.assertEqual(len(selected), 6)
             self.assertTrue(expected.isdisjoint(selected))
             expected |= selected
+        expected.add(build.NOVEMBER_MODEL)
+        self.assertEqual(len(rows), 28)
         self.assertEqual(len(rows), len(expected))
         self.assertEqual({row['model'] for row in rows}, expected)
         for name, raw in files.items():
@@ -141,7 +143,8 @@ class SelectedSixTests(unittest.TestCase):
                     build.outputs()
             self.assertEqual(len(packet_reads), 3)
 
-    def test_active_and_gates(self):
+    @patch.object(build, 'load_november', return_value=None)
+    def test_active_and_gates(self, _november):
         with patch.object(build, 'load_selected_six', return_value=None):
             baseline=build.outputs()
         self.assertEqual(json.loads(baseline['MODEL_AVERAGES.json'])['cost_assumptions'],
@@ -291,7 +294,8 @@ class ActualSelectedSixTests(unittest.TestCase):
             shutil.copytree(build.ROOT/'tools',root/'tools')
             shutil.copy(build.ROOT/'LICENSE-DATA',root/'LICENSE-DATA')
             (root/'source'/build.SELECTED_SIX_FILE).unlink()
-            with patch.object(build,'ROOT',root), patch.object(build,'SELECTED_SIX_DIGEST',None):
+            (root/'source'/build.NOVEMBER_FILE).unlink()
+            with patch.object(build,'ROOT',root), patch.object(build,'SELECTED_SIX_DIGEST',None), patch.object(build,'NOVEMBER_DIGEST',None):
                 files=build.outputs()
             # Original 21 public bytes from accepted baseline commit
             # 4b29d28a891173e10293530b24f881e8a2680af8 (site/ tree).
@@ -321,7 +325,7 @@ class SelectedCostTests(unittest.TestCase):
         self.assertEqual(note, json.loads(files['MODEL_AVERAGES.json'])['cost_assumptions'])
         self.assertTrue(note.endswith('For the original 21 only: ' + assumptions))
         self.assertNotIn('Known 44-case campaign', note)
-        self.assertEqual(note.count('not invoices'), 1)
+        self.assertEqual(note.count('not invoices'), 2)
         self.assertIn('gpt-6.1-terra covers complete recorded usage.', note)
         self.assertIn('claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, '
                       'moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded.', note)

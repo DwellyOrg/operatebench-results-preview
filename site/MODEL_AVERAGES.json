@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "method": "Unweighted mean of one or two per-observation rates; technical corrections replace original technical cells; exact rational arithmetic.",
-  "cost_assumptions": "November costs average reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. The original 21 retain historical campaign tariffs and River owner scenarios, including known retries. Some estimates have incomplete recorded usage. The six additional estimates use official current API rates as of 2026-10-30; gpt-6.1-terra covers complete recorded usage. claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. All costs are estimates, not invoices. For the original 21 only: River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
+  "method": "Unweighted mean of one or two per-observation rates; technical corrections replace original technical cells; exact rational arithmetic. Fable 5.2 instead uses one whole best-quality observation of two, ordered by exact quality rate, goal rate, then observation ID.",
+  "cost_assumptions": "Fable costs use the selected best-quality observation’s reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. November costs average reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. The original 21 retain historical campaign tariffs and River owner scenarios, including known retries. Some estimates have incomplete recorded usage. The six additional estimates use official current API rates as of 2026-10-30; gpt-6.1-terra covers complete recorded usage. claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. All costs are estimates, not invoices. For the original 21 only: River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
   "models": [
     {
       "model": "gpt-6-astra",
@@ -107,6 +107,30 @@
         "pricing_basis": "retained_tariff_estimate"
       },
       "observation_count": 2
+    },
+    {
+      "model": "claude-fable-5-2",
+      "average_quality_percent": "70.5%",
+      "average_goal_achieved_percent": "100.0%",
+      "quality_rate": {
+        "numerator": 31,
+        "denominator": 44
+      },
+      "goal_rate": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "average_full_run_estimate": {
+        "model": "claude-fable-5-2",
+        "pricing_basis": "official_current_tariff_estimate",
+        "incomplete_usage": false,
+        "mean_cost_low_usd": "73.005296",
+        "mean_cost_high_usd": "73.005296"
+      },
+      "observation_count": 1,
+      "aggregation_method": "best_quality_observation",
+      "selected_observation_id": "observation-1",
+      "available_observation_count": 2
     },
     {
       "model": "claude-opus-5-5",
@@ -806,5 +830,19 @@
     "case_set": "same-44-cases",
     "source_revision": "213d672ddaa8ec296c6b0bbe7b9c8e01785e020e",
     "date": "2026-11-05"
+  },
+  "fable_provenance": {
+    "packet": "ANTHROPIC_52_20261110.json",
+    "sha256": "63d2878395c0030cd20cb30d1de46e820c49509074638f70db7ebe775290b515",
+    "schema_version": 1,
+    "model": "claude-fable-5-2",
+    "provider": "anthropic",
+    "endpoint": "messages",
+    "reasoning": "adaptive-low",
+    "currency": "USD",
+    "pricing_basis": "official_current_tariff_estimate",
+    "case_set": "same-44-cases",
+    "source_revision": "1c1cc3b005eaf7928400a0b50a1583826ea381c8",
+    "date": "2026-11-10"
   }
 }

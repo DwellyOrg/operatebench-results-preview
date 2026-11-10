@@ -327,15 +327,31 @@ NOVEMBER_COST_SCOPE = ('November costs average reported-usage estimates for one 
     'at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. ')
 
 
+FABLE_FILE = 'ANTHROPIC_52_20261110.json'
+FABLE_DIGEST = '63d2878395c0030cd20cb30d1de46e820c49509074638f70db7ebe775290b515'
+FABLE_MODEL = 'claude-fable-5-2'
+FABLE_COST_SCOPE = NOVEMBER_COST_SCOPE.replace('November costs average', 'Fable costs use the selected best-quality observation’s')
+
+
 def parse_november(data, digest):
+    return _parse_observations(data, digest, NOVEMBER_MODEL, 'between_tools-low')
+
+
+def parse_fable(data, digest):
+    return _parse_observations(data, digest, FABLE_MODEL, 'adaptive-low',
+                               label='Fable', fixed_date='2026-11-10',
+                               ids={'observation-1', 'observation-2'})
+
+
+def _parse_observations(data, digest, model, reasoning, label='November', fixed_date=None, ids=None):
     if type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest):
-        raise ValueError('November requires an approved byte pin')
+        raise ValueError(f'{label} requires an approved byte pin')
     raw = data.encode() if isinstance(data, str) else data
     if sha256(raw).hexdigest() != digest:
-        raise ValueError('November bytes drift')
+        raise ValueError(f'{label} bytes drift')
     value = json.loads(raw, object_pairs_hook=unique_fields)
-    literals = dict(schema_version=1, model=NOVEMBER_MODEL, provider='anthropic',
-        endpoint='messages', reasoning='between_tools-low', currency='USD',
+    literals = dict(schema_version=1, model=model, provider='anthropic',
+        endpoint='messages', reasoning=reasoning, currency='USD',
         pricing_basis='official_current_tariff_estimate', case_set='same-44-cases')
     if (type(value) is not dict or set(value) != set(literals) | {
             'source_revision', 'date', 'observations'}
@@ -345,7 +361,7 @@ def parse_november(data, digest):
             or type(value['date']) is not str
             or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value['date'])
             or type(value['observations']) is not list or len(value['observations']) != 2):
-        raise ValueError('Invalid November metadata or observation census')
+        raise ValueError(f'Invalid {label} metadata or observation census')
     date.fromisoformat(value['date'])
     seen = set()
     counts = ('assigned', 'scored', 'excluded', 'aborted', 'goal_completed', 'reliable')
@@ -360,14 +376,18 @@ def parse_november(data, digest):
                 or min(obs['excluded'], obs['aborted']) < 0
                 or obs['scored'] + obs['excluded'] + obs['aborted'] != 44
                 or type(obs['incomplete_usage']) is not bool):
-            raise ValueError('Invalid November observation or coverage')
+            raise ValueError(f'Invalid {label} observation or coverage')
         seen.add(obs['id'])
         for key in ('estimated_cost_low_usd', 'estimated_cost_high_usd'):
             if (type(obs[key]) is not str
                     or not re.fullmatch(r'(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?', obs[key])):
-                raise ValueError('November cost must be a canonical nonnegative decimal string')
+                raise ValueError(f'{label} cost must be a canonical nonnegative decimal string')
         if Decimal(obs['estimated_cost_low_usd']) > Decimal(obs['estimated_cost_high_usd']):
-            raise ValueError('Reversed November cost range')
+            raise ValueError(f'Reversed {label} cost range')
+    if fixed_date is not None and value['date'] != fixed_date:
+        raise ValueError(f'Invalid {label} date')
+    if ids is not None and seen != ids:
+        raise ValueError(f'Invalid {label} observation IDs')
     return value
 
 
@@ -380,14 +400,41 @@ def load_november():
     return parse_november(path.read_bytes(), NOVEMBER_DIGEST)
 
 
+def load_fable():
+    path = ROOT / 'source' / FABLE_FILE
+    if not path.exists() and FABLE_DIGEST is None:
+        return None
+    if not path.exists():
+        raise ValueError('Approved Fable packet missing')
+    return parse_fable(path.read_bytes(), FABLE_DIGEST)
+
+
+def select_fable_observation(packet):
+    """Select one whole run by exact quality, then goal, then stable ID."""
+    return min(packet['observations'], key=lambda o: (
+        -Fraction(o['reliable'], o['scored']),
+        -Fraction(o['goal_completed'], o['scored']), o['id']))
+
+
+def fable_summary(packet):
+    observation = select_fable_observation(packet)
+    row = Average(packet['model'], Fraction(observation['reliable'], observation['scored']),
+                  Fraction(observation['goal_completed'], observation['scored']))
+    cost = dict(model=packet['model'], pricing_basis=packet['pricing_basis'],
+        incomplete_usage=observation['incomplete_usage'],
+        mean_cost_low_usd=observation['estimated_cost_low_usd'],
+        mean_cost_high_usd=observation['estimated_cost_high_usd'])
+    return row, cost
+
+
 def november_average(packet):
-    return Average(NOVEMBER_MODEL, *[
+    return Average(packet['model'], *[
         sum((Fraction(o[k], o['scored']) for o in packet['observations']), Fraction()) / 2
         for k in ('reliable', 'goal_completed')])
 
 
 def november_cost(packet):
-    result = dict(model=NOVEMBER_MODEL, pricing_basis=packet['pricing_basis'],
+    result = dict(model=packet['model'], pricing_basis=packet['pricing_basis'],
         incomplete_usage=any(o['incomplete_usage'] for o in packet['observations']))
     for bound in ('low', 'high'):
         values = [o[f'estimated_cost_{bound}_usd'] for o in packet['observations']]
@@ -536,7 +583,7 @@ def money(row):
     return f'${value:.2f}'
 
 
-def render_chart(rows, costs, packet=None):
+def render_chart(rows, costs, packet=None, fable=None):
     # Goal achievement includes strict-quality cases: overlay, never add the rates.
     by_model = {r['model']: r for r in costs['models']}
     bars = []
@@ -572,7 +619,10 @@ def render_chart(rows, costs, packet=None):
             '<span>Quality ↓</span><span>Tasks solved</span><span>Est. run cost</span></div>'
             '<ol class="chart">' + ''.join(bars) + '</ol></figure>')
 
-    if packet:
+    if fable:
+        chart = chart.replace('Both are average percentages across two observations.',
+            'Percentages follow the per-model methodology above.')
+    elif packet:
         chart = chart.replace('Both are average percentages across two observations.',
             'Both are average percentages across one or two observations.')
     return chart
@@ -598,6 +648,11 @@ def render(rows=None):
     if november:
         rows = sorted(rows + [november_average(november)], key=average_order)
         costs = dict(costs, models=costs['models'] + [november_cost(november)])
+    fable = load_fable()
+    if fable:
+        row, cost = fable_summary(fable)
+        rows = sorted(rows + [row], key=average_order)
+        costs = dict(costs, models=costs['models'] + [cost])
     note = ('Known 44-case campaign estimates including known retries, not invoices. Some estimates have incomplete recorded usage. '
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
@@ -621,14 +676,25 @@ def render(rows=None):
         note = NOVEMBER_COST_SCOPE + note
         template = template.replace('21 models', f'{len(rows)} models').replace('<strong>21</strong>', f'<strong>{len(rows)}</strong>')
         template = template.replace('<footer>', '<footer><p><a href="./' + NOVEMBER_FILE + '">November observation aggregates</a></p>')
+    if fable:
+        note = FABLE_COST_SCOPE + note
+        template = template.replace('Unweighted average of one or two original per-observation rates,',
+            'Fable 5.2 uses the best-quality of two runs (one whole observation); other models retain averages,')
+        template = template.replace('Unweighted average of two original per-observation rates,',
+            'Fable 5.2 uses the best-quality of two runs (one whole observation); other models retain averages,')
+        template = template.replace('Download model averages (JSON)', 'Download model summaries (JSON)')
+        template = template.replace('/ Model averages', '/ Model summaries')
+        template = re.sub(r'\b\d+ models\b', f'{len(rows)} models', template)
+        template = re.sub(r'<strong>\d+</strong>', f'<strong>{len(rows)}</strong>', template, count=1)
+        template = template.replace('<footer>', '<footer><p><a href="./' + FABLE_FILE + '">Fable observation aggregates</a></p>')
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
                        'STYLE_VERSION': sha256((ROOT / 'tools/style.css').read_bytes()).hexdigest()[:12],
-                       'RESULTS': render_chart(rows, costs, packet), 'COST_NOTE': escape(note)}.items():
+                       'RESULTS': render_chart(rows, costs, packet, fable), 'COST_NOTE': escape(note)}.items():
         template = template.replace('{{' + key + '}}', value)
     return template
 
 
-def aggregate_data(rows, costs, packet=None, november=None):
+def aggregate_data(rows, costs, packet=None, november=None, fable=None):
     by_model = {r['model']: r for r in costs['models']}
     value = {'schema_version': 1,
         'method': 'Unweighted mean of two original per-observation rates; exact rational arithmetic.',
@@ -656,6 +722,16 @@ def aggregate_data(rows, costs, packet=None, november=None):
         for row in value['models']:
             if row['model'] == NOVEMBER_MODEL:
                 row['observation_count'] = 2
+    if fable:
+        value['method'] += ' Fable 5.2 instead uses one whole best-quality observation of two, ordered by exact quality rate, goal rate, then observation ID.'
+        value['cost_assumptions'] = FABLE_COST_SCOPE + value['cost_assumptions']
+        value['fable_provenance'] = dict(packet=FABLE_FILE, sha256=FABLE_DIGEST,
+            **{k: v for k, v in fable.items() if k != 'observations'})
+        for row in value['models']:
+            if row['model'] == FABLE_MODEL:
+                row.update(aggregation_method='best_quality_observation',
+                    selected_observation_id=select_fable_observation(fable)['id'],
+                    available_observation_count=len(fable['observations']), observation_count=1)
     return (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode()
 
 
@@ -670,8 +746,13 @@ def outputs():
     if november:
         rows = sorted(rows + [november_average(november)], key=average_order)
         costs = dict(costs, models=costs['models'] + [november_cost(november)])
+    fable = load_fable()
+    if fable:
+        row, cost = fable_summary(fable)
+        rows = sorted(rows + [row], key=average_order)
+        costs = dict(costs, models=costs['models'] + [cost])
     files = {'index.html': render().encode(),
-            'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet, november),
+            'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet, november, fable),
             'REPEAT_20261024.json': (ROOT / 'source/REPEAT_20261024.json').read_bytes(),
             'GEMINI_AGGREGATES.json': (ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes(),
             'favicon.svg': (ROOT / 'tools/favicon.svg').read_bytes(),
@@ -692,6 +773,10 @@ def outputs():
         raw = (ROOT / 'source' / NOVEMBER_FILE).read_bytes()
         parse_november(raw, NOVEMBER_DIGEST)
         files[NOVEMBER_FILE] = raw
+    if fable:
+        raw = (ROOT / 'source' / FABLE_FILE).read_bytes()
+        parse_fable(raw, FABLE_DIGEST)
+        files[FABLE_FILE] = raw
     return files
 
 

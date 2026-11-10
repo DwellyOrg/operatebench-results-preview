@@ -36,6 +36,7 @@ def encode(value):
 
 
 class NovemberTests(unittest.TestCase):
+    @patch.object(build, 'load_fable', new=lambda: None)
     def test_absent_parity(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -84,6 +85,7 @@ class NovemberTests(unittest.TestCase):
             with self.assertRaises(ValueError): build.parse_november(duplicate,sha256(duplicate).hexdigest())
         with self.assertRaises(ValueError): build.parse_november(raw+b' ',pin)
 
+    @patch.object(build, 'load_fable', new=lambda: None)
     def test_combined_and_gates(self):
         with patch.object(build, 'load_november', return_value=None):
             baseline=build.outputs()
@@ -166,14 +168,14 @@ class NovemberTests(unittest.TestCase):
                          [(44,44,41,19,0,0,False,'20.066624','20.066624'),
                           (44,44,40,20,0,0,False,'20.551442','20.551442')])
         files = build.outputs()
-        self.assertEqual(len(files), 13)
+        self.assertEqual(len(files), 14)
         self.assertEqual(files[build.NOVEMBER_FILE], raw)
         data = json.loads(files['MODEL_AVERAGES.json'])
         rows = data['models']
-        self.assertEqual(len(rows), 28)
-        self.assertEqual(len({r['model'] for r in rows}), 28)
+        self.assertEqual(len(rows), 29)
+        self.assertEqual(len({r['model'] for r in rows}), 29)
         self.assertEqual(sum(r['observation_count'] == 2 for r in rows), 22)
-        self.assertEqual(sum(r['observation_count'] == 1 for r in rows), 6)
+        self.assertEqual(sum(r['observation_count'] == 1 for r in rows), 7)
         row = next(r for r in rows if r['model'] == build.NOVEMBER_MODEL)
         self.assertEqual(Fraction(**row['quality_rate']), Fraction(39,88))
         self.assertEqual(Fraction(**row['goal_rate']), Fraction(81,88))
@@ -184,7 +186,7 @@ class NovemberTests(unittest.TestCase):
             incomplete_usage=False, pricing_basis='official_current_tariff_estimate'))
         self.assertEqual(data['november_provenance']['sha256'], pin)
         chart = files['index.html'].decode().split('<ol class="chart">')[1].split('</ol>')[0]
-        self.assertEqual(chart.count('<li class="chart-row">'), 28)
+        self.assertEqual(chart.count('<li class="chart-row">'), 29)
         self.assertEqual(re.findall(r'<code>([^<]+)</code>', chart), [r['model'] for r in rows])
         self.assertEqual(rows, sorted(rows, key=lambda r: (-Fraction(**r['quality_rate']),
             -Fraction(**r['goal_rate']), r['model'].lower(), r['model'])))
@@ -192,6 +194,7 @@ class NovemberTests(unittest.TestCase):
         self.assertEqual(re.findall(r'<strong>(.*?)</strong>', sonnet), ['44.3%', '92.0%', '$20.31'])
         self.assertNotRegex(chart.lower(), r'scored|assigned|badge|newcomer|experimental|\d+/\d+')
 
+    @patch.object(build, 'load_fable', new=lambda: None)
     def test_real_enabled_preserves_old_27_objects_and_download_bytes(self):
         with patch.object(build, 'load_november', return_value=None):
             old = build.outputs()

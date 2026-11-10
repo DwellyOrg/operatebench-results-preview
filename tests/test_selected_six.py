@@ -63,10 +63,10 @@ class SelectedSixTests(unittest.TestCase):
     def test_public_chart_omits_scored_counts_preserves_metrics_and_order(self):
         html = build.render()
         chart = re.findall(r'<li class="chart-row">(.*?)</li>', html)
-        rows = sorted(build.average_rows() + build.selected_averages(build.load_selected_six()) + [build.november_average(build.load_november())],
+        rows = sorted(build.average_rows() + build.selected_averages(build.load_selected_six()) + [build.november_average(build.load_november()), build.fable_summary(build.load_fable())[0]],
                       key=build.average_order)
-        self.assertEqual(len(chart), 28)
-        self.assertEqual(len(rows), 28)
+        self.assertEqual(len(chart), 29)
+        self.assertEqual(len(rows), 29)
         for item, row in zip(chart, rows):
             with self.subTest(model=row.model):
                 self.assertIn('<code>' + row.model + '</code>', item)
@@ -89,8 +89,8 @@ class SelectedSixTests(unittest.TestCase):
             self.assertEqual(len(selected), 6)
             self.assertTrue(expected.isdisjoint(selected))
             expected |= selected
-        expected.add(build.NOVEMBER_MODEL)
-        self.assertEqual(len(rows), 28)
+        expected.update((build.NOVEMBER_MODEL, build.FABLE_MODEL))
+        self.assertEqual(len(rows), 29)
         self.assertEqual(len(rows), len(expected))
         self.assertEqual({row['model'] for row in rows}, expected)
         for name, raw in files.items():
@@ -143,6 +143,7 @@ class SelectedSixTests(unittest.TestCase):
                     build.outputs()
             self.assertEqual(len(packet_reads), 3)
 
+    @patch.object(build, 'load_fable', new=lambda: None)
     @patch.object(build, 'load_november', return_value=None)
     def test_active_and_gates(self, _november):
         with patch.object(build, 'load_selected_six', return_value=None):
@@ -287,6 +288,7 @@ class ActualSelectedSixTests(unittest.TestCase):
             raw,pin=encode(value)
             with self.assertRaises(ValueError): build.parse_selected_six(raw,pin)
 
+    @patch.object(build, 'load_fable', new=lambda: None)
     def test_disabled_copy_reproduces_original_public_bytes(self):
         with TemporaryDirectory() as directory:
             root=Path(directory)
@@ -325,7 +327,7 @@ class SelectedCostTests(unittest.TestCase):
         self.assertEqual(note, json.loads(files['MODEL_AVERAGES.json'])['cost_assumptions'])
         self.assertTrue(note.endswith('For the original 21 only: ' + assumptions))
         self.assertNotIn('Known 44-case campaign', note)
-        self.assertEqual(note.count('not invoices'), 2)
+        self.assertEqual(note.count('not invoices'), 3)
         self.assertIn('gpt-6.1-terra covers complete recorded usage.', note)
         self.assertIn('claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, '
                       'moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded.', note)

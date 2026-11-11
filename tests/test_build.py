@@ -7,6 +7,7 @@ from hashlib import sha256
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 import unittest
+from unittest.mock import patch
 from tools import build
 
 # Independent transcription of every published row for regression assertions.
@@ -80,6 +81,7 @@ class Document(HTMLParser):
         if self.in_model:
             self.models.append(data)
 
+@patch.object(build, 'load_carbon', new=lambda: None)
 class BuildTests(unittest.TestCase):
     def setUp(self):
         self.data = (build.ROOT / 'source/MODEL_RESULTS.md').read_bytes()
@@ -191,8 +193,10 @@ class BuildTests(unittest.TestCase):
 
 
     def test_generated_output_matches(self):
-        for name, data in build.outputs().items():
-            self.assertEqual((build.ROOT / 'site' / name).read_bytes(), data, name)
+        with patch.object(build, 'load_carbon', new=lambda: build.parse_carbon(
+                (build.ROOT/'source'/build.CARBON_FILE).read_bytes(), build.CARBON_DIGEST)):
+            for name, data in build.outputs().items():
+                self.assertEqual((build.ROOT / 'site' / name).read_bytes(), data, name)
 
 
 if __name__ == '__main__':

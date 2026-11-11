@@ -59,6 +59,7 @@ class ChartModelParser(HTMLParser):
             self.stack[-1][2].append(data)
 
 
+@patch.object(build, 'load_carbon', new=lambda: None)
 class SelectedSixTests(unittest.TestCase):
     def test_public_chart_omits_scored_counts_preserves_metrics_and_order(self):
         html = build.render()
@@ -76,25 +77,28 @@ class SelectedSixTests(unittest.TestCase):
         self.assertNotIn('Coverage is total scored/assigned', html)
 
     def test_current_generated_bytes_and_census(self):
-        packet = build.load_selected_six()
-        files = build.outputs()
-        rows = json.loads(files['MODEL_AVERAGES.json'])['models']
-        expected = {row.model for row in build.average_rows()}
-        self.assertEqual(len(expected), 21)
-        if build.SELECTED_SIX_DIGEST is None:
-            self.assertIsNone(packet)
-        else:
-            self.assertIsNotNone(packet)
-            selected = {row['model'] for row in packet['models']}
-            self.assertEqual(len(selected), 6)
-            self.assertTrue(expected.isdisjoint(selected))
-            expected |= selected
-        expected.update((build.NOVEMBER_MODEL, build.FABLE_MODEL))
-        self.assertEqual(len(rows), 29)
-        self.assertEqual(len(rows), len(expected))
-        self.assertEqual({row['model'] for row in rows}, expected)
-        for name, raw in files.items():
-            self.assertEqual(raw, (build.ROOT/'site'/name).read_bytes(), name)
+        with patch.object(build, 'load_carbon', new=lambda: build.parse_carbon(
+                (build.ROOT/'source'/build.CARBON_FILE).read_bytes(), build.CARBON_DIGEST)):
+            packet = build.load_selected_six()
+            files = build.outputs()
+            rows = json.loads(files['MODEL_AVERAGES.json'])['models']
+            expected = {row.model for row in build.average_rows()}
+            self.assertEqual(len(expected), 21)
+            if build.SELECTED_SIX_DIGEST is None:
+                self.assertIsNone(packet)
+            else:
+                self.assertIsNotNone(packet)
+                selected = {row['model'] for row in packet['models']}
+                self.assertEqual(len(selected), 6)
+                self.assertTrue(expected.isdisjoint(selected))
+                expected |= selected
+            expected.update((build.NOVEMBER_MODEL, build.FABLE_MODEL, build.CARBON_MODEL))
+            self.assertEqual(len(rows), 30)
+            self.assertEqual(len(rows), len(expected))
+            self.assertEqual({row['model'] for row in rows}, expected)
+            for name, raw in files.items():
+                self.assertEqual(raw, (build.ROOT/'site'/name).read_bytes(), name)
+
 
     def test_schema_independent_of_pin(self):
         raw, pin = encode(fixture())
@@ -234,6 +238,7 @@ class SelectedSixTests(unittest.TestCase):
                     with self.assertRaises(ValueError): build.outputs()
 
 
+@patch.object(build, 'load_carbon', new=lambda: None)
 class ActualSelectedSixTests(unittest.TestCase):
     def test_accepted_actual_goldens(self):
         packet = build.load_selected_six()
@@ -319,6 +324,7 @@ class ActualSelectedSixTests(unittest.TestCase):
                 self.assertEqual(sha256(raw).hexdigest(), expected[name], name)
 
 
+@patch.object(build, 'load_carbon', new=lambda: None)
 class SelectedCostTests(unittest.TestCase):
     def test_combined_cost_note_scopes_legacy_and_names_incomplete_models(self):
         files = build.outputs()

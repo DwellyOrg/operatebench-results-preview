@@ -20,6 +20,7 @@ def fixture():
     return value
 
 
+@patch.object(build, 'load_carbon', new=lambda: None)
 class FableTests(unittest.TestCase):
     def test_closed_schema(self):
         self.assertEqual(build.parse_fable(*encode(fixture())), fixture())

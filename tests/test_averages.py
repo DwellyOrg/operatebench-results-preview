@@ -42,6 +42,7 @@ def fixture():
             incomplete_usage=True, pricing_basis='retained_tariff_estimate') for model in ORDER])
 
 
+@patch.object(build, 'load_carbon', new=lambda: None)
 class AverageTests(unittest.TestCase):
     def test_independent_means_and_order(self):
         rows = build.average_rows(); by_id = {r.model:r for r in rows}
@@ -163,7 +164,7 @@ class AverageTests(unittest.TestCase):
                          {r['model']:r for r in costs['models']})
         html = outputs['index.html'].decode()
         notice = (build.ROOT/'NOTICE').read_text()
-        for text in ('29 summary rows (22 two-observation means, six single-observation rates and one best-of-two Fable selection): site/MODEL_AVERAGES.json',
+        for text in ('30 summary rows (23 two-observation means, six single-observation rates and one best-of-two Fable selection): site/MODEL_AVERAGES.json',
                      'source/AVERAGE_COSTS.json and its site/AVERAGE_COSTS.json copy.',
                      'These data and the site results content are CC BY 4.0, owned by',
                      'Prospire Technologies Ltd.',

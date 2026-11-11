@@ -333,6 +333,28 @@ FABLE_MODEL = 'claude-fable-5-2'
 FABLE_COST_SCOPE = NOVEMBER_COST_SCOPE.replace('November costs average', 'Fable costs use the selected best-quality observation’s')
 
 
+# Approved two-observation aggregate; preserve the original packet bytes.
+CARBON_FILE = 'CARBON_20261111.json'
+CARBON_DIGEST = '09aae295f8c20f2015354a422e3c3d7545a2d330299633def52f20290d91b936'
+CARBON_MODEL = 'gemini-4-carbon'
+CARBON_COST_SCOPE = NOVEMBER_COST_SCOPE.replace('November', 'Carbon')
+
+
+def parse_carbon(data, digest):
+    return _parse_observations(data, digest, CARBON_MODEL, 'low',
+        label='Carbon', fixed_date='2026-11-11',
+        ids={'observation-1', 'observation-2'}, provider='gemini', endpoint='generateContent')
+
+
+def load_carbon():
+    path = ROOT / 'source' / CARBON_FILE
+    if not path.exists() and CARBON_DIGEST is None:
+        return None
+    if not path.exists():
+        raise ValueError('Approved Carbon packet missing')
+    return parse_carbon(path.read_bytes(), CARBON_DIGEST)
+
+
 def parse_november(data, digest):
     return _parse_observations(data, digest, NOVEMBER_MODEL, 'between_tools-low')
 
@@ -343,15 +365,16 @@ def parse_fable(data, digest):
                                ids={'observation-1', 'observation-2'})
 
 
-def _parse_observations(data, digest, model, reasoning, label='November', fixed_date=None, ids=None):
+def _parse_observations(data, digest, model, reasoning, label='November', fixed_date=None, ids=None,
+                        provider='anthropic', endpoint='messages'):
     if type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest):
         raise ValueError(f'{label} requires an approved byte pin')
     raw = data.encode() if isinstance(data, str) else data
     if sha256(raw).hexdigest() != digest:
         raise ValueError(f'{label} bytes drift')
     value = json.loads(raw, object_pairs_hook=unique_fields)
-    literals = dict(schema_version=1, model=model, provider='anthropic',
-        endpoint='messages', reasoning=reasoning, currency='USD',
+    literals = dict(schema_version=1, model=model, provider=provider,
+        endpoint=endpoint, reasoning=reasoning, currency='USD',
         pricing_basis='official_current_tariff_estimate', case_set='same-44-cases')
     if (type(value) is not dict or set(value) != set(literals) | {
             'source_revision', 'date', 'observations'}
@@ -648,6 +671,10 @@ def render(rows=None):
     if november:
         rows = sorted(rows + [november_average(november)], key=average_order)
         costs = dict(costs, models=costs['models'] + [november_cost(november)])
+    carbon = load_carbon()
+    if carbon:
+        rows = sorted(rows + [november_average(carbon)], key=average_order)
+        costs = dict(costs, models=costs['models'] + [november_cost(carbon)])
     fable = load_fable()
     if fable:
         row, cost = fable_summary(fable)
@@ -687,6 +714,11 @@ def render(rows=None):
         template = re.sub(r'\b\d+ models\b', f'{len(rows)} models', template)
         template = re.sub(r'<strong>\d+</strong>', f'<strong>{len(rows)}</strong>', template, count=1)
         template = template.replace('<footer>', '<footer><p><a href="./' + FABLE_FILE + '">Fable observation aggregates</a></p>')
+    if carbon:
+        note = CARBON_COST_SCOPE + note
+        template = re.sub(r'\b\d+ models\b', f'{len(rows)} models', template)
+        template = re.sub(r'<strong>\d+</strong>', f'<strong>{len(rows)}</strong>', template, count=1)
+        template = template.replace('<footer>', '<footer><p><a href="./' + CARBON_FILE + '">Carbon observation aggregates</a></p>')
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
                        'STYLE_VERSION': sha256((ROOT / 'tools/style.css').read_bytes()).hexdigest()[:12],
                        'RESULTS': render_chart(rows, costs, packet, fable), 'COST_NOTE': escape(note)}.items():
@@ -694,7 +726,7 @@ def render(rows=None):
     return template
 
 
-def aggregate_data(rows, costs, packet=None, november=None, fable=None):
+def aggregate_data(rows, costs, packet=None, november=None, fable=None, carbon=None):
     by_model = {r['model']: r for r in costs['models']}
     value = {'schema_version': 1,
         'method': 'Unweighted mean of two original per-observation rates; exact rational arithmetic.',
@@ -732,6 +764,13 @@ def aggregate_data(rows, costs, packet=None, november=None, fable=None):
                 row.update(aggregation_method='best_quality_observation',
                     selected_observation_id=select_fable_observation(fable)['id'],
                     available_observation_count=len(fable['observations']), observation_count=1)
+    if carbon:
+        value['cost_assumptions'] = CARBON_COST_SCOPE + value['cost_assumptions']
+        value['carbon_provenance'] = dict(packet=CARBON_FILE, sha256=CARBON_DIGEST,
+            **{k: v for k, v in carbon.items() if k != 'observations'})
+        for row in value['models']:
+            if row['model'] == CARBON_MODEL:
+                row['observation_count'] = 2
     return (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode()
 
 
@@ -746,13 +785,17 @@ def outputs():
     if november:
         rows = sorted(rows + [november_average(november)], key=average_order)
         costs = dict(costs, models=costs['models'] + [november_cost(november)])
+    carbon = load_carbon()
+    if carbon:
+        rows = sorted(rows + [november_average(carbon)], key=average_order)
+        costs = dict(costs, models=costs['models'] + [november_cost(carbon)])
     fable = load_fable()
     if fable:
         row, cost = fable_summary(fable)
         rows = sorted(rows + [row], key=average_order)
         costs = dict(costs, models=costs['models'] + [cost])
     files = {'index.html': render().encode(),
-            'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet, november, fable),
+            'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet, november, fable, carbon),
             'REPEAT_20261024.json': (ROOT / 'source/REPEAT_20261024.json').read_bytes(),
             'GEMINI_AGGREGATES.json': (ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes(),
             'favicon.svg': (ROOT / 'tools/favicon.svg').read_bytes(),
@@ -777,6 +820,10 @@ def outputs():
         raw = (ROOT / 'source' / FABLE_FILE).read_bytes()
         parse_fable(raw, FABLE_DIGEST)
         files[FABLE_FILE] = raw
+    if carbon:
+        raw = (ROOT / 'source' / CARBON_FILE).read_bytes()
+        parse_carbon(raw, CARBON_DIGEST)
+        files[CARBON_FILE] = raw
     return files
 
 

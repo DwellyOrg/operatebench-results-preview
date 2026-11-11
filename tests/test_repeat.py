@@ -53,6 +53,7 @@ mistral-medium-3-5
 nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
 Qwen/Qwen3.5-9B'''.splitlines()
 
+@patch.object(build, 'load_carbon', new=lambda: None)
 class RepeatTests(unittest.TestCase):
     def setUp(self):
         self.data = (build.ROOT / 'source/REPEAT_20261024.json').read_bytes()

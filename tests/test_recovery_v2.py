@@ -30,6 +30,7 @@ def recovery():
     return p
 
 
+@patch.object(build, 'load_carbon', new=lambda: None)
 class RecoveryTests(unittest.TestCase):
     def setUp(self):
         for name, value in [('ORIGINAL_SOURCE', 'a' * 40), ('CORRECTION_SOURCE', 'b' * 40)]:

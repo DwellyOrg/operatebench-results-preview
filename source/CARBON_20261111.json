@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "model": "gemini-4-carbon",
+  "provider": "gemini",
+  "endpoint": "generateContent",
+  "reasoning": "low",
+  "currency": "USD",
+  "pricing_basis": "official_current_tariff_estimate",
+  "case_set": "same-44-cases",
+  "source_revision": "19aaf4397e4e8752d62984617a2e41f19dcc2aa2",
+  "date": "2026-11-11",
+  "observations": [
+    {
+      "id": "observation-1",
+      "assigned": 44,
+      "scored": 44,
+      "excluded": 0,
+      "aborted": 0,
+      "goal_completed": 44,
+      "reliable": 42,
+      "estimated_cost_low_usd": "96.098096",
+      "estimated_cost_high_usd": "96.098096",
+      "incomplete_usage": false
+    },
+    {
+      "id": "observation-2",
+      "assigned": 44,
+      "scored": 44,
+      "excluded": 0,
+      "aborted": 0,
+      "goal_completed": 44,
+      "reliable": 43,
+      "estimated_cost_low_usd": "94.58946",
+      "estimated_cost_high_usd": "94.58946",
+      "incomplete_usage": false
+    }
+  ]
+}

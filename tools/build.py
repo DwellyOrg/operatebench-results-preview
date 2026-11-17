@@ -340,6 +340,39 @@ CARBON_MODEL = 'gemini-4-carbon'
 CARBON_COST_SCOPE = NOVEMBER_COST_SCOPE.replace('November', 'Carbon')
 
 
+# Approved sanitized same44 packets; each requires its exact byte pin.
+OPENAI62_FILES = {model: model.upper().replace('.', '_').replace('-', '_') + '.json'
+                  for model in ('gpt-6.2-astra', 'gpt-6.2-sol')}
+OPENAI62_DIGESTS = {
+    'gpt-6.2-astra': 'a520d96bcb0eb7cc1fd040b31277eba6b86fe4663ac55c1acdab12a6b25af0e8',
+    'gpt-6.2-sol': 'b8c1bbd42241d29b0e9dc57f493107b0cdcedd2a11e97a4d8fd3c1e9e195f630',
+}
+OPENAI62_COST_SCOPE = ('OpenAI 6.2 costs estimate known recorded token usage at Standard and cache-TTL rates for one '
+    '44-case observation with declared technical-recovery inclusion. Missing usage remains unknown; '
+    'no extrapolation is applied. These are estimates, not invoices. ')
+
+
+def parse_openai62(data, digest, model):
+    if type(model) is not str or model not in OPENAI62_FILES:
+        raise ValueError('Unexpected OpenAI 6.2 model')
+    return _parse_observations(data, digest, model, 'low', label='OpenAI 6.2',
+        ids={'observation-1'}, provider='openai', endpoint='responses',
+        observation_count=1, cost_assumptions=True)
+
+
+def load_openai62():
+    packets = []
+    for model, filename in OPENAI62_FILES.items():
+        path = ROOT / 'source' / filename
+        pin = OPENAI62_DIGESTS[model]
+        if not path.exists() and pin is None:
+            continue
+        if not path.exists():
+            raise ValueError('Approved OpenAI 6.2 packet missing')
+        packets.append(parse_openai62(path.read_bytes(), pin, model))
+    return packets
+
+
 def parse_carbon(data, digest):
     return _parse_observations(data, digest, CARBON_MODEL, 'low',
         label='Carbon', fixed_date='2026-11-11',
@@ -366,7 +399,7 @@ def parse_fable(data, digest):
 
 
 def _parse_observations(data, digest, model, reasoning, label='November', fixed_date=None, ids=None,
-                        provider='anthropic', endpoint='messages'):
+                        provider='anthropic', endpoint='messages', observation_count=2, cost_assumptions=False):
     if type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest):
         raise ValueError(f'{label} requires an approved byte pin')
     raw = data.encode() if isinstance(data, str) else data
@@ -377,14 +410,18 @@ def _parse_observations(data, digest, model, reasoning, label='November', fixed_
         endpoint=endpoint, reasoning=reasoning, currency='USD',
         pricing_basis='official_current_tariff_estimate', case_set='same-44-cases')
     if (type(value) is not dict or set(value) != set(literals) | {
-            'source_revision', 'date', 'observations'}
+            'source_revision', 'date', 'observations'} | ({'cost_assumptions'} if cost_assumptions else set())
             or any(type(value[k]) is not type(v) or value[k] != v for k, v in literals.items())
             or type(value['source_revision']) is not str
             or not re.fullmatch(r'[0-9a-f]{40}', value['source_revision'])
             or type(value['date']) is not str
             or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value['date'])
-            or type(value['observations']) is not list or len(value['observations']) != 2):
+            or type(value['observations']) is not list or len(value['observations']) != observation_count):
         raise ValueError(f'Invalid {label} metadata or observation census')
+    if cost_assumptions and (type(value['cost_assumptions']) is not str
+            or not 1 <= len(value['cost_assumptions']) <= 2000
+            or any(c in value['cost_assumptions'] for c in ('/', '\\', '<', '>', '\n', '\r'))):
+        raise ValueError('Invalid sanitized cost assumptions')
     date.fromisoformat(value['date'])
     seen = set()
     counts = ('assigned', 'scored', 'excluded', 'aborted', 'goal_completed', 'reliable')
@@ -452,7 +489,7 @@ def fable_summary(packet):
 
 def november_average(packet):
     return Average(packet['model'], *[
-        sum((Fraction(o[k], o['scored']) for o in packet['observations']), Fraction()) / 2
+        sum((Fraction(o[k], o['scored']) for o in packet['observations']), Fraction()) / len(packet['observations'])
         for k in ('reliable', 'goal_completed')])
 
 
@@ -464,7 +501,7 @@ def november_cost(packet):
         # Keep decimal means exact even beyond the ambient Decimal precision.
         with localcontext() as context:
             context.prec = sum(len(v) for v in values) + 4
-            mean = sum(map(Decimal, values)) / 2
+            mean = sum(map(Decimal, values)) / len(values)
             text = format(mean, 'f')
             result[f'mean_cost_{bound}_usd'] = text.rstrip('0').rstrip('.') if '.' in text else text
     return result
@@ -680,6 +717,10 @@ def render(rows=None):
         row, cost = fable_summary(fable)
         rows = sorted(rows + [row], key=average_order)
         costs = dict(costs, models=costs['models'] + [cost])
+    openai62 = load_openai62()
+    for new in openai62:
+        rows = sorted(rows + [november_average(new)], key=average_order)
+        costs = dict(costs, models=costs['models'] + [november_cost(new)])
     note = ('Known 44-case campaign estimates including known retries, not invoices. Some estimates have incomplete recorded usage. '
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
@@ -719,14 +760,37 @@ def render(rows=None):
         template = re.sub(r'\b\d+ models\b', f'{len(rows)} models', template)
         template = re.sub(r'<strong>\d+</strong>', f'<strong>{len(rows)}</strong>', template, count=1)
         template = template.replace('<footer>', '<footer><p><a href="./' + CARBON_FILE + '">Carbon observation aggregates</a></p>')
+    if openai62:
+        note = OPENAI62_COST_SCOPE + ' '.join(p['cost_assumptions'] for p in openai62) + ' ' + note
+        template = re.sub(r'\b\d+ models\b', f'{len(rows)} models', template)
+        template = re.sub(r'<strong>\d+</strong>', f'<strong>{len(rows)}</strong>', template, count=1)
+        if not packet:
+            template = template.replace('two original per-observation rates', 'one or two original per-observation rates')
+            template = template.replace('descriptive, not a controlled ranking.',
+                'descriptive, not a controlled ranking. OpenAI 6.2 models have one observation each.')
+        template = template.replace('other models retain averages,', 'other models retain their existing aggregation,')
+        if fable and not packet:
+            template = template.replace('other models retain their existing aggregation,',
+                'other models use one or two observations as applicable,')
+        template = template.replace('the six additional models have one observation each.',
+            'the six additional models and both OpenAI 6.2 models have one observation each.')
+        for new in openai62:
+            template = template.replace('<footer>', '<footer><p><a href="./' + OPENAI62_FILES[new['model']] + '">' + escape(new['model']) + ' observation aggregates</a> · <a href="' + UPSTREAM + '/tree/' + new['source_revision'] + '">actual source revision</a></p>')
+    chart = render_chart(rows, costs, packet, fable)
+    if openai62:
+        for text in ('Percentages follow the per-model methodology above.',
+                     'Both are average percentages across one or two observations.',
+                     'Both are average percentages across two observations.'):
+            chart = chart.replace(text,
+                'OpenAI 6.2 percentages use one observation; other percentages follow the per-model methodology above.')
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
                        'STYLE_VERSION': sha256((ROOT / 'tools/style.css').read_bytes()).hexdigest()[:12],
-                       'RESULTS': render_chart(rows, costs, packet, fable), 'COST_NOTE': escape(note)}.items():
+                       'RESULTS': chart, 'COST_NOTE': escape(note)}.items():
         template = template.replace('{{' + key + '}}', value)
     return template
 
 
-def aggregate_data(rows, costs, packet=None, november=None, fable=None, carbon=None):
+def aggregate_data(rows, costs, packet=None, november=None, fable=None, carbon=None, openai62=()):
     by_model = {r['model']: r for r in costs['models']}
     value = {'schema_version': 1,
         'method': 'Unweighted mean of two original per-observation rates; exact rational arithmetic.',
@@ -771,6 +835,17 @@ def aggregate_data(rows, costs, packet=None, november=None, fable=None, carbon=N
         for row in value['models']:
             if row['model'] == CARBON_MODEL:
                 row['observation_count'] = 2
+    if openai62:
+        if not packet:
+            value['method'] = value['method'].replace('mean of two original per-observation rates',
+                                                       'mean of one or two original per-observation rates')
+        value['method'] += ' Each OpenAI 6.2 model uses one observation.'
+        value['cost_assumptions'] = OPENAI62_COST_SCOPE + ' '.join(p['cost_assumptions'] for p in openai62) + ' ' + value['cost_assumptions']
+        value['openai62_provenance'] = [dict(packet=OPENAI62_FILES[p['model']],
+            sha256=OPENAI62_DIGESTS[p['model']], source_url=f"{UPSTREAM}/tree/{p['source_revision']}", **{k:v for k,v in p.items() if k != 'observations'}) for p in openai62]
+        for row in value['models']:
+            if row['model'] in OPENAI62_FILES:
+                row['observation_count'] = 1
     return (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode()
 
 
@@ -794,8 +869,12 @@ def outputs():
         row, cost = fable_summary(fable)
         rows = sorted(rows + [row], key=average_order)
         costs = dict(costs, models=costs['models'] + [cost])
+    openai62 = load_openai62()
+    for new in openai62:
+        rows = sorted(rows + [november_average(new)], key=average_order)
+        costs = dict(costs, models=costs['models'] + [november_cost(new)])
     files = {'index.html': render().encode(),
-            'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet, november, fable, carbon),
+            'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet, november, fable, carbon, openai62),
             'REPEAT_20261024.json': (ROOT / 'source/REPEAT_20261024.json').read_bytes(),
             'GEMINI_AGGREGATES.json': (ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes(),
             'favicon.svg': (ROOT / 'tools/favicon.svg').read_bytes(),
@@ -824,6 +903,11 @@ def outputs():
         raw = (ROOT / 'source' / CARBON_FILE).read_bytes()
         parse_carbon(raw, CARBON_DIGEST)
         files[CARBON_FILE] = raw
+    for new in openai62:
+        model = new['model']
+        raw = (ROOT / 'source' / OPENAI62_FILES[model]).read_bytes()
+        parse_openai62(raw, OPENAI62_DIGESTS[model], model)
+        files[OPENAI62_FILES[model]] = raw
     return files
 
 

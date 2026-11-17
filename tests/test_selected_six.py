@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 from tools import build
+from tools.build import load_openai62 as configured_openai62
 
 
 def fixture():
@@ -60,6 +61,8 @@ class ChartModelParser(HTMLParser):
 
 
 @patch.object(build, 'load_carbon', new=lambda: None)
+# Historical intake assertions retain their exact original census and goldens.
+@patch.object(build, 'load_openai62', new=lambda: [])
 class SelectedSixTests(unittest.TestCase):
     def test_public_chart_omits_scored_counts_preserves_metrics_and_order(self):
         html = build.render()
@@ -78,10 +81,14 @@ class SelectedSixTests(unittest.TestCase):
 
     def test_current_generated_bytes_and_census(self):
         with patch.object(build, 'load_carbon', new=lambda: build.parse_carbon(
-                (build.ROOT/'source'/build.CARBON_FILE).read_bytes(), build.CARBON_DIGEST)):
+                (build.ROOT/'source'/build.CARBON_FILE).read_bytes(), build.CARBON_DIGEST)), \
+                patch.object(build, 'load_openai62', new=configured_openai62):
             packet = build.load_selected_six()
             files = build.outputs()
-            rows = json.loads(files['MODEL_AVERAGES.json'])['models']
+            all_rows = json.loads(files['MODEL_AVERAGES.json'])['models']
+            added = {p['model'] for p in build.load_openai62()}
+            rows = [r for r in all_rows if r['model'] not in added]
+            self.assertEqual(len(all_rows), 30 + len(added))
             expected = {row.model for row in build.average_rows()}
             self.assertEqual(len(expected), 21)
             if build.SELECTED_SIX_DIGEST is None:
@@ -96,6 +103,7 @@ class SelectedSixTests(unittest.TestCase):
             self.assertEqual(len(rows), 30)
             self.assertEqual(len(rows), len(expected))
             self.assertEqual({row['model'] for row in rows}, expected)
+            self.assertEqual({row['model'] for row in all_rows}, expected | added)
             for name, raw in files.items():
                 self.assertEqual(raw, (build.ROOT/'site'/name).read_bytes(), name)
 
@@ -239,6 +247,8 @@ class SelectedSixTests(unittest.TestCase):
 
 
 @patch.object(build, 'load_carbon', new=lambda: None)
+# Historical intake assertions retain their exact original census and goldens.
+@patch.object(build, 'load_openai62', new=lambda: [])
 class ActualSelectedSixTests(unittest.TestCase):
     def test_accepted_actual_goldens(self):
         packet = build.load_selected_six()
@@ -325,6 +335,8 @@ class ActualSelectedSixTests(unittest.TestCase):
 
 
 @patch.object(build, 'load_carbon', new=lambda: None)
+# Historical intake assertions retain their exact original census and goldens.
+@patch.object(build, 'load_openai62', new=lambda: [])
 class SelectedCostTests(unittest.TestCase):
     def test_combined_cost_note_scopes_legacy_and_names_incomplete_models(self):
         files = build.outputs()

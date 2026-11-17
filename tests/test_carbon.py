@@ -22,6 +22,8 @@ def fixture():
     return packet
 
 
+# Historical intake assertions retain their exact original census and goldens.
+@patch.object(build, 'load_openai62', new=lambda: [])
 class CarbonTests(unittest.TestCase):
     def test_closed_schema_and_byte_controls(self):
         packet = fixture()
@@ -122,6 +124,8 @@ class CarbonTests(unittest.TestCase):
         self.assertEqual(build.november_cost(packet)['mean_cost_high_usd'], '61728394506172839450617283945.05')
 
 
+# Historical intake assertions retain their exact original census and goldens.
+@patch.object(build, 'load_openai62', new=lambda: [])
 class ApprovedCarbonTests(unittest.TestCase):
     def test_real_approved_packet_and_historical_parity(self):
         fixtures = build.ROOT/'tests/fixtures'

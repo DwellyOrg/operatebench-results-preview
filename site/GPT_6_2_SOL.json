@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "model": "gpt-6.2-sol",
+  "provider": "openai",
+  "endpoint": "responses",
+  "reasoning": "low",
+  "currency": "USD",
+  "pricing_basis": "official_current_tariff_estimate",
+  "case_set": "same-44-cases",
+  "source_revision": "89bb9f6342c5f23c1fd031b84f56d805195dbe28",
+  "date": "2026-11-17",
+  "cost_assumptions": "gpt-6.2-sol: estimate includes all recorded token usage in the scored observation and 44 retained technical first-response attempts. Their known overhead is 0.4501136 USD. Explicit cache TTL partitions are used; reasoning is already included in output. Additional fees unknown; not an invoice.",
+  "observations": [
+    {
+      "id": "observation-1",
+      "assigned": 44,
+      "scored": 44,
+      "excluded": 0,
+      "aborted": 0,
+      "goal_completed": 43,
+      "reliable": 43,
+      "estimated_cost_low_usd": "9.5845606",
+      "estimated_cost_high_usd": "9.5845606",
+      "incomplete_usage": false
+    }
+  ]
+}

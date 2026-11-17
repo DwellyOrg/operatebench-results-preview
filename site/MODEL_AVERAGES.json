@@ -1,8 +1,29 @@
 {
   "schema_version": 1,
-  "method": "Unweighted mean of one or two per-observation rates; technical corrections replace original technical cells; exact rational arithmetic. Fable 5.2 instead uses one whole best-quality observation of two, ordered by exact quality rate, goal rate, then observation ID.",
-  "cost_assumptions": "Carbon costs average reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. Fable costs use the selected best-quality observation’s reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. November costs average reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. The original 21 retain historical campaign tariffs and River owner scenarios, including known retries. Some estimates have incomplete recorded usage. The six additional estimates use official current API rates as of 2026-10-30; gpt-6.1-terra covers complete recorded usage. claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. All costs are estimates, not invoices. For the original 21 only: River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
+  "method": "Unweighted mean of one or two per-observation rates; technical corrections replace original technical cells; exact rational arithmetic. Fable 5.2 instead uses one whole best-quality observation of two, ordered by exact quality rate, goal rate, then observation ID. Each OpenAI 6.2 model uses one observation.",
+  "cost_assumptions": "OpenAI 6.2 costs estimate known recorded token usage at Standard and cache-TTL rates for one 44-case observation with declared technical-recovery inclusion. Missing usage remains unknown; no extrapolation is applied. These are estimates, not invoices. gpt-6.2-astra: estimate includes all recorded token usage in the scored observation and 44 retained technical first-response attempts. Their known overhead is 1.7911276 USD. Explicit cache TTL partitions are used; reasoning is already included in output. Additional fees unknown; not an invoice. gpt-6.2-sol: estimate includes all recorded token usage in the scored observation and 44 retained technical first-response attempts. Their known overhead is 0.4501136 USD. Explicit cache TTL partitions are used; reasoning is already included in output. Additional fees unknown; not an invoice. Carbon costs average reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. Fable costs use the selected best-quality observation’s reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. November costs average reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. The original 21 retain historical campaign tariffs and River owner scenarios, including known retries. Some estimates have incomplete recorded usage. The six additional estimates use official current API rates as of 2026-10-30; gpt-6.1-terra covers complete recorded usage. claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. All costs are estimates, not invoices. For the original 21 only: River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
   "models": [
+    {
+      "model": "gpt-6.2-sol",
+      "average_quality_percent": "97.7%",
+      "average_goal_achieved_percent": "97.7%",
+      "quality_rate": {
+        "numerator": 43,
+        "denominator": 44
+      },
+      "goal_rate": {
+        "numerator": 43,
+        "denominator": 44
+      },
+      "average_full_run_estimate": {
+        "model": "gpt-6.2-sol",
+        "pricing_basis": "official_current_tariff_estimate",
+        "incomplete_usage": false,
+        "mean_cost_low_usd": "9.5845606",
+        "mean_cost_high_usd": "9.5845606"
+      },
+      "observation_count": 1
+    },
     {
       "model": "gemini-4-carbon",
       "average_quality_percent": "96.6%",
@@ -86,6 +107,27 @@
         "pricing_basis": "retained_tariff_estimate"
       },
       "observation_count": 2
+    },
+    {
+      "model": "gpt-6.2-astra",
+      "average_quality_percent": "95.5%",
+      "average_goal_achieved_percent": "97.7%",
+      "quality_rate": {
+        "numerator": 21,
+        "denominator": 22
+      },
+      "goal_rate": {
+        "numerator": 43,
+        "denominator": 44
+      },
+      "average_full_run_estimate": {
+        "model": "gpt-6.2-astra",
+        "pricing_basis": "official_current_tariff_estimate",
+        "incomplete_usage": false,
+        "mean_cost_low_usd": "38.5159988",
+        "mean_cost_high_usd": "38.5159988"
+      },
+      "observation_count": 1
     },
     {
       "model": "gpt-6.1-terra",
@@ -879,5 +921,39 @@
     "case_set": "same-44-cases",
     "source_revision": "19aaf4397e4e8752d62984617a2e41f19dcc2aa2",
     "date": "2026-11-11"
-  }
+  },
+  "openai62_provenance": [
+    {
+      "packet": "GPT_6_2_ASTRA.json",
+      "sha256": "a520d96bcb0eb7cc1fd040b31277eba6b86fe4663ac55c1acdab12a6b25af0e8",
+      "source_url": "https://github.com/DwellyOrg/OperateBench/tree/89bb9f6342c5f23c1fd031b84f56d805195dbe28",
+      "schema_version": 1,
+      "model": "gpt-6.2-astra",
+      "provider": "openai",
+      "endpoint": "responses",
+      "reasoning": "low",
+      "currency": "USD",
+      "pricing_basis": "official_current_tariff_estimate",
+      "case_set": "same-44-cases",
+      "source_revision": "89bb9f6342c5f23c1fd031b84f56d805195dbe28",
+      "date": "2026-11-17",
+      "cost_assumptions": "gpt-6.2-astra: estimate includes all recorded token usage in the scored observation and 44 retained technical first-response attempts. Their known overhead is 1.7911276 USD. Explicit cache TTL partitions are used; reasoning is already included in output. Additional fees unknown; not an invoice."
+    },
+    {
+      "packet": "GPT_6_2_SOL.json",
+      "sha256": "b8c1bbd42241d29b0e9dc57f493107b0cdcedd2a11e97a4d8fd3c1e9e195f630",
+      "source_url": "https://github.com/DwellyOrg/OperateBench/tree/89bb9f6342c5f23c1fd031b84f56d805195dbe28",
+      "schema_version": 1,
+      "model": "gpt-6.2-sol",
+      "provider": "openai",
+      "endpoint": "responses",
+      "reasoning": "low",
+      "currency": "USD",
+      "pricing_basis": "official_current_tariff_estimate",
+      "case_set": "same-44-cases",
+      "source_revision": "89bb9f6342c5f23c1fd031b84f56d805195dbe28",
+      "date": "2026-11-17",
+      "cost_assumptions": "gpt-6.2-sol: estimate includes all recorded token usage in the scored observation and 44 retained technical first-response attempts. Their known overhead is 0.4501136 USD. Explicit cache TTL partitions are used; reasoning is already included in output. Additional fees unknown; not an invoice."
+    }
+  ]
 }

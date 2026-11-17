@@ -1,9 +1,12 @@
-# Future same44 intake
+# Approved same44 intake
 
 The approved one-observation packets are active at `source/GPT_6_2_ASTRA.json`
 and `source/GPT_6_2_SOL.json`, with exact SHA256 pins in
 [tools/build.py](tools/build.py). The builder validates each packet on load and
-again before exporting its unchanged bytes. The two models each scored the
+again before exporting its unchanged bytes. Both files are required by the
+production pins. A controlled configuration may omit an individual file only
+when its corresponding pin is `None`; a missing pinned file or an unpinned
+present file is rejected. The two models each scored the
 existing 44 cases. The actual [evaluated source version](https://github.com/DwellyOrg/OperateBench/tree/89bb9f6342c5f23c1fd031b84f56d805195dbe28)
 is linked from the preview and machine provenance. The added data are owned by
 Prospire Technologies Ltd and licensed CC BY 4.0; no independent human or

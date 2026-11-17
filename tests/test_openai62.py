@@ -253,3 +253,61 @@ class OpenAI62Tests(unittest.TestCase):
             part = next(x for x in chart.split('<li class="chart-row">') if '<code>'+model+'</code>' in x)
             self.assertEqual(__import__('re').findall(r'<strong>(.*?)</strong>',part), [qp,gp,display])
         self.assertNotRegex(chart.lower(), r'scored|assigned|badge|accordion|<details|\d+/\d+')
+
+    def test_actual_openai_with_optional_legacy_intakes(self):
+        fable, selected = build.load_fable(), build.load_selected_six()
+        self.assertIsNotNone(fable)
+        self.assertIsNotNone(selected)
+        for has_fable in (False, True):
+            for has_selected in (False, True):
+                with self.subTest(fable=has_fable, selected_six=has_selected), \
+                        patch.object(build, 'load_fable', return_value=fable if has_fable else None), \
+                        patch.object(build, 'load_selected_six', return_value=selected if has_selected else None):
+                    files = build.outputs()
+                    html = build.render()
+                    self.assertEqual(html.encode(), files['index.html'])
+                    method = html.split('<p id="method">', 1)[1].split('</p>', 1)[0]
+                    note = html.split('<p id="chart-note">', 1)[1].split('</p>', 1)[0]
+                    data = json.loads(files['MODEL_AVERAGES.json'])
+                    self.assertIn('OpenAI 6.2 models have one observation each', method)
+                    self.assertIn('OpenAI 6.2 percentages use one observation', note)
+                    self.assertNotIn('Both are average percentages across', note)
+                    self.assertIn('Each OpenAI 6.2 model uses one observation.', data['method'])
+                    self.assertNotIn('mean of two original per-observation rates', data['method'])
+                    if has_fable:
+                        self.assertIn('Fable 5.2 uses the best-quality of two runs', method)
+                        if not has_selected:
+                            self.assertIn('other models use one or two observations as applicable', method)
+                        self.assertIn('Fable 5.2 instead uses one whole best-quality observation of two', data['method'])
+                    else:
+                        self.assertIn('one or two original per-observation rates', method)
+                        self.assertNotIn('Fable 5.2 instead', data['method'])
+                    self.assertEqual({p['model'] for p in data['openai62_provenance']}, set(build.OPENAI62_FILES))
+                    self.assertEqual(sum(r['model'] in build.OPENAI62_FILES for r in data['models']), 2)
+                    for model, filename in build.OPENAI62_FILES.items():
+                        self.assertIn(f'<a href="./{filename}">{model} observation aggregates</a>', html)
+                        self.assertEqual(files[filename], (build.ROOT/'source'/filename).read_bytes())
+
+    def test_download_labels_identify_exact_model(self):
+        import re
+        html = build.render()
+        for model, filename in build.OPENAI62_FILES.items():
+            label = re.search(r'<a href="\./' + re.escape(filename) + r'">([^<]+)</a>', html)
+            self.assertIsNotNone(label)
+            self.assertEqual(label.group(1), model + ' observation aggregates')
+
+    def test_legacy_intake_bytes_in_all_optional_configurations(self):
+        expected = {
+            (False, False): ('9106502bd808cbb36d7df10d0833abcec3b830478ec5ff292d7d1774802aaadf', '06fbfda6db4665ee8fbe1db47b948ac3a00e0ef9d1ecb9c9baa9cb7a7f13eac0'),
+            (False, True): ('b787f96794aac86af1921c4d04310d8335fab2fac3c3df83eeb9c367da8e8a52', 'a8315e1fd51e1a9389d3b67b565b85f38b4f25a383760123cff77e57dd99b45c'),
+            (True, False): ('ccc0058862a96269b223ea3230584ccaf5e9afc0a1e5a5080ac48e777c506b7d', '579345b160032bddc32d7c93161024489fa3131d6254bccee0434972d82b9b15'),
+            (True, True): ('e367a2052e6a4cc135822bb703615eb900ef00e4c3183097e6bc4601edd2126e', '2aab131b3b602439c71f8b0ea9444d4a96ae0bdcb6c4899fa2de8e481238d9db'),
+        }
+        fable, selected = build.load_fable(), build.load_selected_six()
+        for (has_fable, has_selected), hashes in expected.items():
+            with self.subTest(fable=has_fable, selected_six=has_selected), \
+                    patch.object(build, 'load_openai62', return_value=[]), \
+                    patch.object(build, 'load_fable', return_value=fable if has_fable else None), \
+                    patch.object(build, 'load_selected_six', return_value=selected if has_selected else None):
+                files = build.outputs()
+                self.assertEqual(tuple(sha256(files[n]).hexdigest() for n in ('index.html', 'MODEL_AVERAGES.json')), hashes)

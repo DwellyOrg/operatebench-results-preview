@@ -340,7 +340,7 @@ CARBON_MODEL = 'gemini-4-carbon'
 CARBON_COST_SCOPE = NOVEMBER_COST_SCOPE.replace('November', 'Carbon')
 
 
-# Future sanitized same44 packets; absent until parent approves exact bytes.
+# Approved sanitized same44 packets; each requires its exact byte pin.
 OPENAI62_FILES = {model: model.upper().replace('.', '_').replace('-', '_') + '.json'
                   for model in ('gpt-6.2-astra', 'gpt-6.2-sol')}
 OPENAI62_DIGESTS = {
@@ -764,15 +764,25 @@ def render(rows=None):
         note = OPENAI62_COST_SCOPE + ' '.join(p['cost_assumptions'] for p in openai62) + ' ' + note
         template = re.sub(r'\b\d+ models\b', f'{len(rows)} models', template)
         template = re.sub(r'<strong>\d+</strong>', f'<strong>{len(rows)}</strong>', template, count=1)
+        if not packet:
+            template = template.replace('two original per-observation rates', 'one or two original per-observation rates')
+            template = template.replace('descriptive, not a controlled ranking.',
+                'descriptive, not a controlled ranking. OpenAI 6.2 models have one observation each.')
         template = template.replace('other models retain averages,', 'other models retain their existing aggregation,')
+        if fable and not packet:
+            template = template.replace('other models retain their existing aggregation,',
+                'other models use one or two observations as applicable,')
         template = template.replace('the six additional models have one observation each.',
             'the six additional models and both OpenAI 6.2 models have one observation each.')
         for new in openai62:
-            template = template.replace('<footer>', '<footer><p><a href="./' + OPENAI62_FILES[new['model']] + '">OpenAI 6.2 observation aggregates</a> · <a href="' + UPSTREAM + '/tree/' + new['source_revision'] + '">actual source revision</a></p>')
+            template = template.replace('<footer>', '<footer><p><a href="./' + OPENAI62_FILES[new['model']] + '">' + escape(new['model']) + ' observation aggregates</a> · <a href="' + UPSTREAM + '/tree/' + new['source_revision'] + '">actual source revision</a></p>')
     chart = render_chart(rows, costs, packet, fable)
     if openai62:
-        chart = chart.replace('Percentages follow the per-model methodology above.',
-            'OpenAI 6.2 percentages use one observation; other percentages follow the per-model methodology above.')
+        for text in ('Percentages follow the per-model methodology above.',
+                     'Both are average percentages across one or two observations.',
+                     'Both are average percentages across two observations.'):
+            chart = chart.replace(text,
+                'OpenAI 6.2 percentages use one observation; other percentages follow the per-model methodology above.')
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
                        'STYLE_VERSION': sha256((ROOT / 'tools/style.css').read_bytes()).hexdigest()[:12],
                        'RESULTS': chart, 'COST_NOTE': escape(note)}.items():
@@ -826,6 +836,9 @@ def aggregate_data(rows, costs, packet=None, november=None, fable=None, carbon=N
             if row['model'] == CARBON_MODEL:
                 row['observation_count'] = 2
     if openai62:
+        if not packet:
+            value['method'] = value['method'].replace('mean of two original per-observation rates',
+                                                       'mean of one or two original per-observation rates')
         value['method'] += ' Each OpenAI 6.2 model uses one observation.'
         value['cost_assumptions'] = OPENAI62_COST_SCOPE + ' '.join(p['cost_assumptions'] for p in openai62) + ' ' + value['cost_assumptions']
         value['openai62_provenance'] = [dict(packet=OPENAI62_FILES[p['model']],

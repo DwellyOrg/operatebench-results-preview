@@ -164,6 +164,29 @@ class FiveIntakeTests(unittest.TestCase):
         self.assertNotIn('≥ marks a recorded-usage subtotal', page)
         self.assertNotIn('recorded usage subtotal">≥', page)
 
+    def test_incomplete_range_uses_floored_low_endpoint(self):
+        model = next(iter(build.FIVE_FILES))
+        packet = fixture(model)
+        obs = packet['observations'][0]
+        for low, high, expected in (('1.119', '12.345', '$1.11'),
+                                    ('1.12', '12.345', '$1.12'),
+                                    ('12.345', '12.345', '$12.34')):
+            with self.subTest(low=low, high=high):
+                obs.update(estimated_cost_low_usd=low, estimated_cost_high_usd=high,
+                           incomplete_usage=True)
+                build.parse_five(*encode(packet), model)
+                with patch.object(build, 'load_five', return_value=[packet]):
+                    page = build.render()
+                self.assertIn('aria-label="at least ' + expected +
+                              ', recorded usage subtotal">≥ ' + expected, page)
+        obs.update(estimated_cost_low_usd='1.119', estimated_cost_high_usd='12.345',
+                   incomplete_usage=False)
+        build.parse_five(*encode(packet), model)
+        with patch.object(build, 'load_five', return_value=[packet]):
+            page = build.render()
+        self.assertIn('<strong>$12.35</strong>', page)
+        self.assertNotIn('recorded usage subtotal">≥', page)
+
     def test_decoder_and_rejections(self):
         for model in build.FIVE_FILES:
             packet = fixture(model)

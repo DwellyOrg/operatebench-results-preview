@@ -708,6 +708,8 @@ def render_chart(rows, costs, packet=None, fable=None, five=()):
             label = '<span>' + label + '</span>'
         cost = escape(money(by_model[row.model]))
         if row.model in incomplete_five:
+            low = Decimal(by_model[row.model]['mean_cost_low_usd'])
+            cost = f'${low.quantize(Decimal(".01"), rounding=ROUND_FLOOR):.2f}'
             cost = '<span aria-label="at least ' + cost + ', recorded usage subtotal">≥ ' + cost + '</span>'
         bars.append('<li class="chart-row"><div class="chart-model">'
             f'<span class="chart-rank" aria-hidden="true">{rank:02d}</span>'

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "model": "gemini-4-neon",
+  "provider": "gemini",
+  "endpoint": "generateContent",
+  "reasoning": "low",
+  "currency": "USD",
+  "pricing_basis": "official_current_tariff_estimate",
+  "case_set": "same-44-cases",
+  "source_revision": "1fdb4a470231088cb05adf3daa4fb867e228d02a",
+  "date": "2026-11-19",
+  "cost_assumptions": "One observation on the same 44 cases. Low thinking requested on the native Google API. Estimated pre-tax USD from reported input, implicit cache and output tokens at published Standard rates; thinking is counted once within output. All attempts included. No paid grounding tools. Additional fees are unknown; this is not an invoice.",
+  "observations": [
+    {
+      "id": "observation-1",
+      "assigned": 44,
+      "scored": 44,
+      "excluded": 0,
+      "aborted": 0,
+      "goal_completed": 44,
+      "reliable": 39,
+      "estimated_cost_low_usd": "109.913439",
+      "estimated_cost_high_usd": "109.913439",
+      "incomplete_usage": false
+    }
+  ]
+}

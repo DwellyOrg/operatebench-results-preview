@@ -60,9 +60,12 @@ class ChartModelParser(HTMLParser):
             self.stack[-1][2].append(data)
 
 
+configured_five = build.load_five
+
 @patch.object(build, 'load_carbon', new=lambda: None)
 # Historical intake assertions retain their exact original census and goldens.
 @patch.object(build, 'load_openai62', new=lambda: [])
+@patch.object(build, 'load_five', new=lambda: [])
 class SelectedSixTests(unittest.TestCase):
     def test_public_chart_omits_scored_counts_preserves_metrics_and_order(self):
         html = build.render()
@@ -82,11 +85,12 @@ class SelectedSixTests(unittest.TestCase):
     def test_current_generated_bytes_and_census(self):
         with patch.object(build, 'load_carbon', new=lambda: build.parse_carbon(
                 (build.ROOT/'source'/build.CARBON_FILE).read_bytes(), build.CARBON_DIGEST)), \
-                patch.object(build, 'load_openai62', new=configured_openai62):
+                patch.object(build, 'load_openai62', new=configured_openai62), \
+                patch.object(build, 'load_five', new=configured_five):
             packet = build.load_selected_six()
             files = build.outputs()
             all_rows = json.loads(files['MODEL_AVERAGES.json'])['models']
-            added = {p['model'] for p in build.load_openai62()}
+            added = {p['model'] for p in build.load_openai62()} | {p['model'] for p in build.load_five()}
             rows = [r for r in all_rows if r['model'] not in added]
             self.assertEqual(len(all_rows), 30 + len(added))
             expected = {row.model for row in build.average_rows()}
@@ -249,6 +253,7 @@ class SelectedSixTests(unittest.TestCase):
 @patch.object(build, 'load_carbon', new=lambda: None)
 # Historical intake assertions retain their exact original census and goldens.
 @patch.object(build, 'load_openai62', new=lambda: [])
+@patch.object(build, 'load_five', new=lambda: [])
 class ActualSelectedSixTests(unittest.TestCase):
     def test_accepted_actual_goldens(self):
         packet = build.load_selected_six()
@@ -337,6 +342,7 @@ class ActualSelectedSixTests(unittest.TestCase):
 @patch.object(build, 'load_carbon', new=lambda: None)
 # Historical intake assertions retain their exact original census and goldens.
 @patch.object(build, 'load_openai62', new=lambda: [])
+@patch.object(build, 'load_five', new=lambda: [])
 class SelectedCostTests(unittest.TestCase):
     def test_combined_cost_note_scopes_legacy_and_names_incomplete_models(self):
         files = build.outputs()

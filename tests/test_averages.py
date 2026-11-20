@@ -12,6 +12,40 @@ from unittest.mock import patch
 from tools import build
 from test_build import Document
 
+
+def historical_ui_bytes(name, raw):
+    """Reverse only the approved presentation changes for historical byte goldens."""
+    name = name.removeprefix('site/')
+    if name == 'style.css':
+        addition = (b'\n.methodology{max-width:100%;border:1px solid #325047;border-radius:10px;padding:16px 20px;overflow-wrap:anywhere}\n'
+            b'.methodology summary{cursor:pointer;font-weight:650;color:#e1f1eb}\n'
+            b'.methodology p{color:#a8bcb7;font-size:14px;max-width:900px}\n')
+        current = b'display:flex;flex-wrap:wrap;gap:40px;justify-content:space-between}'
+        if not raw.endswith(addition) or raw.count(current) != 1:
+            raise AssertionError('Unexpected stylesheet changes')
+        return raw[:-len(addition)].replace(current, b'display:flex;gap:40px;justify-content:space-between}', 1)
+    if name != 'index.html':
+        return raw
+    text = raw.decode()
+    details = re.search(r'<details class="methodology"><summary>Methodology &amp; sources</summary><p>(.*?)</p>(<p id="cost-note">.*?</p><p><a href="\./MODEL_AVERAGES.json" download>.*?</a></p>)(.*?)</details>', text)
+    footer = re.search(r'<footer>(<div class="brand">.*?</div>)<p>Results © Prospire Technologies Ltd .*?</p></footer>', text)
+    if not details or not footer:
+        raise AssertionError('Unexpected methodology or footer markup')
+    paragraphs = re.findall(r'<p>.*?</p>', details.group(3))
+    if not paragraphs or ''.join(paragraphs) != details.group(3):
+        raise AssertionError('Unexpected provenance markup')
+    original_footer = '<footer>' + ''.join(paragraphs[:-1]) + footer.group(1) + paragraphs[-1] + '</footer>'
+    text = text.replace(footer.group(0), original_footer, 1)
+    text = text.replace(details.group(0), details.group(2), 1)
+    caveat = '<p id="method">Exploratory results from synthetic cases, not a controlled ranking. Run settings and coverage vary; costs are estimates, not invoices.</p>'
+    if text.count(caveat) != 1 or text.count('style.css?v=b88e9e918e53') != 1:
+        raise AssertionError('Unexpected caveat or cache key')
+    text = text.replace(caveat, '<p id="method">' + details.group(1) + '</p>', 1)
+    text = text.replace('aria-describedby="chart-note method"', 'aria-describedby="chart-note method cost-note"', 1)
+    text = text.replace('per-model methodology in Methodology &amp; sources below.', 'per-model methodology above.')
+    text = text.replace('per-model methodology in Methodology &amp; sources below;', 'per-model methodology above;')
+    return text.replace('style.css?v=b88e9e918e53', 'style.css?v=35344b7bf793', 1).encode()
+
 ORDER = '''gpt-6-astra
 gemini-4-argon
 gpt-6.1-sol
@@ -47,6 +81,23 @@ def fixture():
 @patch.object(build, 'load_openai62', new=lambda: [])
 @patch.object(build, 'load_five', new=lambda: [])
 class AverageTests(unittest.TestCase):
+    def test_footer_wrap_and_generated_stylesheet(self):
+        files = build.outputs()
+        css = files['style.css'].decode()
+        base = re.search(r'(?m)^footer\{([^}]*)\}', css).group(1)
+        self.assertIn('display:flex', base.split(';'))
+        self.assertIn('flex-wrap:wrap', base.split(';'))
+        self.assertRegex(css, r'@media\(max-width:900px\)\{[^}]*\}[^@]*footer\{display:block\}')
+        self.assertIn('@media(max-width:600px)', css)
+        self.assertEqual(files['style.css'], (build.ROOT / 'site/style.css').read_bytes())
+        self.assertIn('style.css?v=' + sha256(files['style.css']).hexdigest()[:12], files['index.html'].decode())
+        old_css = historical_ui_bytes('style.css', files['style.css'])
+        self.assertEqual(sha256(old_css).hexdigest(), '35344b7bf79357009c94cc2639002423b22705072314bbd20a7cd4bc0a546ddc')
+        self.assertIn(b'style.css?v=35344b7bf793', historical_ui_bytes('index.html', files['index.html']))
+        for name in ('style.css', 'index.html'):
+            with self.assertRaises(AssertionError):
+                historical_ui_bytes(name, b'unrelated')
+
     def test_independent_means_and_order(self):
         rows = build.average_rows(); by_id = {r.model:r for r in rows}
         self.assertEqual([r.model for r in rows], ORDER)
@@ -175,7 +226,7 @@ class AverageTests(unittest.TestCase):
                      'Costs not reported in this unchanged repeat snapshot;',
                      'no official, independent human or provider attestation is claimed.'):
             self.assertIn(text, notice)
-        footer = html.split('<footer>', 1)[1].split('</footer>', 1)[0]
+        footer = html.split('<details class="methodology">', 1)[1].split('</details>', 1)[0]
         self.assertIn('owner-authorized Gemini, repeat and <a href="./AVERAGE_COSTS.json">cost aggregates</a>', footer)
         self.assertIn('owned by Prospire Technologies Ltd', footer)
         self.assertIn('https://creativecommons.org/licenses/by/4.0/', footer)

@@ -718,7 +718,7 @@ def render_chart(rows, costs, packet=None, fable=None):
             '<strong>' + percent(row.goal) + '</strong></span>'
             '<span class="chart-stat chart-cost"><span class="metric-label">Est. run cost</span>'
             '<strong>' + escape(money(by_model[row.model])) + '</strong></span></li>')
-    chart = ('<figure class="leaderboard" aria-labelledby="chart-title" aria-describedby="chart-note method cost-note">'
+    chart = ('<figure class="leaderboard" aria-labelledby="chart-title" aria-describedby="chart-note method">'
             '<figcaption id="chart-title">Quality, tasks solved &amp; cost</figcaption>'
             '<div class="chart-key"><span><i class="quality-key" aria-hidden="true"></i>Strict quality</span>'
             '<span><i class="goal-key" aria-hidden="true"></i>Tasks solved</span>'
@@ -732,7 +732,7 @@ def render_chart(rows, costs, packet=None, fable=None):
 
     if fable:
         chart = chart.replace('Both are average percentages across two observations.',
-            'Percentages follow the per-model methodology above.')
+            'Percentages follow the per-model methodology in Methodology &amp; sources below.')
     elif packet:
         chart = chart.replace('Both are average percentages across two observations.',
             'Both are average percentages across one or two observations.')
@@ -854,21 +854,36 @@ def render(rows=None):
             template = template.replace('<footer>', '<footer><p><a href="./' + FIVE_FILES[new['model']] + '">' + escape(new['model']) + ' observation aggregates (JSON)</a> · <a href="' + UPSTREAM + '/tree/' + new['source_revision'] + '">primary actual source revision for ' + escape(new['model']) + '</a>' + refs + '</p>')
     chart = render_chart(rows, costs, packet, fable)
     if openai62:
-        for text in ('Percentages follow the per-model methodology above.',
+        for text in ('Percentages follow the per-model methodology in Methodology &amp; sources below.',
                      'Both are average percentages across one or two observations.',
                      'Both are average percentages across two observations.'):
             chart = chart.replace(text,
-                'OpenAI 6.2 percentages use one observation; other percentages follow the per-model methodology above.')
+                'OpenAI 6.2 percentages use one observation; other percentages follow the per-model methodology in Methodology &amp; sources below.')
     if five:
-        for text in ('Percentages follow the per-model methodology above.',
+        for text in ('Percentages follow the per-model methodology in Methodology &amp; sources below.',
                      'Both are average percentages across one or two observations.',
                      'Both are average percentages across two observations.',
-                     'OpenAI 6.2 percentages use one observation; other percentages follow the per-model methodology above.'):
-            chart = chart.replace(text, 'Percentages follow the per-model methodology above; additional intake models use one observation each.')
+                     'OpenAI 6.2 percentages use one observation; other percentages follow the per-model methodology in Methodology &amp; sources below.'):
+            chart = chart.replace(text, 'Percentages follow the per-model methodology in Methodology &amp; sources below; additional intake models use one observation each.')
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
                        'STYLE_VERSION': sha256((ROOT / 'tools/style.css').read_bytes()).hexdigest()[:12],
                        'RESULTS': chart, 'COST_NOTE': escape(note)}.items():
         template = template.replace('{{' + key + '}}', value)
+    # Keep the full audit material together, closed by default, below the chart.
+    method = re.search(r'<p id="method">(.*?)</p>', template).group(1)
+    template = template.replace('<p id="method">' + method + '</p>',
+        '<p id="method">Exploratory results from synthetic cases, not a controlled ranking. '
+        'Run settings and coverage vary; costs are estimates, not invoices.</p>', 1)
+    footer = re.search(r'<footer>(.*?)</footer>', template).group(1)
+    brand = re.search(r'<div class="brand">.*?</div>', footer).group(0)
+    provenance = footer.replace(brand, '', 1)
+    template = template.replace('<footer>' + footer + '</footer>', '<footer>' + brand +
+        '<p>Results © Prospire Technologies Ltd · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> '
+        '(<a href="./LICENSE-DATA">license</a>) · Site code <a href="https://github.com/DwellyOrg/OperateBench/blob/' + SHA + '/LICENSE">Apache-2.0</a> · '
+        '<a href="' + UPSTREAM + '">Project</a></p></footer>', 1)
+    template = template.replace('<p id="cost-note">', '<details class="methodology"><summary>Methodology &amp; sources</summary>' +
+        '<p>' + method + '</p><p id="cost-note">', 1)
+    template = template.replace('</p></section>\n<section class="about"', '</p>' + provenance + '</details></section>\n<section class="about"', 1)
     return template
 
 

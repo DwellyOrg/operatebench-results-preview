@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 from tools import build
+from test_averages import historical_ui_bytes
 from tools.build import load_openai62 as configured_openai62
 
 
@@ -336,7 +337,7 @@ class ActualSelectedSixTests(unittest.TestCase):
             }
             self.assertEqual(set(files), set(expected))
             for name, raw in files.items():
-                self.assertEqual(sha256(raw).hexdigest(), expected[name], name)
+                self.assertEqual(sha256(historical_ui_bytes(name, raw)).hexdigest(), expected[name], name)
 
 
 @patch.object(build, 'load_carbon', new=lambda: None)

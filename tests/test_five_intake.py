@@ -52,17 +52,18 @@ class DetailsParser(HTMLParser):
 
 
 class FiveIntakeTests(unittest.TestCase):
-    def test_approved_three_packets(self):
+    def test_approved_four_packets(self):
         expected = {
             'gemini-4-hydrogen': (44, 10, '56.285823', '6cc8dcbac6f9cfb993c8c9b25cacaf17fc80ec852618f00e029b2c0ce4d5ee73'),
             'gemini-4-neon': (44, 39, '109.913439', 'd44eee5ef1a5b6d8aae10c3daae2c8409bfcb2c7621f816a246c9e0d25427435'),
             'muse-ember-1.0': (22, 9, '1.329589588', '1ad27648d23ca03e49e0b052b75c86f3faf78deae508cbc448fa2bffe3de45bc'),
+            'moonshotai/Kimi-K3.1-Pro': (6, 2, '203.819236', 'feda7a97b812294a2706defd40e504ba9bffdccfcb9a5d1fce01c43b65c78b6f'),
         }
         files = build.outputs()
         data = json.loads(files['MODEL_AVERAGES.json'])
-        self.assertEqual(len(data['models']), 35)
+        self.assertEqual(len(data['models']), 36)
         self.assertEqual({p['model'] for p in build.load_five()}, set(expected))
-        self.assertEqual(len(files), 20)
+        self.assertEqual(len(files), 21)
         self.assertIn('.nojekyll', files)
         for model, (goal, reliable, cost, pin) in expected.items():
             raw = (build.ROOT / 'source' / build.FIVE_FILES[model]).read_bytes()
@@ -76,6 +77,9 @@ class FiveIntakeTests(unittest.TestCase):
             self.assertEqual(row['observation_count'], 1)
             self.assertEqual(row['average_full_run_estimate']['mean_cost_high_usd'], cost)
             self.assertIn(model + ' observation aggregates (JSON)', files['index.html'].decode())
+        page = files['index.html'].decode()
+        self.assertIn('aria-label="at least $203.81, recorded usage subtotal">≥ $203.81', page)
+        self.assertIn('≥ marks a recorded-usage subtotal; total cost is unknown.', page.split('<details', 1)[0])
         self.assertIn('served setting is not independently attested', data['cost_assumptions'])
         ember = next(p for p in data['five_provenance'] if p['model'] == 'muse-ember-1.0')
         self.assertEqual(ember['additional_source_revisions'], ['9e7464c1924432787c8ba8582cde42aa5d058d20'])
@@ -144,6 +148,44 @@ class FiveIntakeTests(unittest.TestCase):
                     self.assertNotIn('./' + build.FIVE_FILES[packet['model']], doc.footer_links)
                 self.assertIn('Corrected technical attempts replace only', ''.join(doc.text))
                 self.assertIn('Fable 5.2', ''.join(doc.text))
+
+    def test_incomplete_cost_label_for_optional_intake(self):
+        packet = fixture(next(iter(build.FIVE_FILES)))
+        obs = packet['observations'][0]
+        obs.update(estimated_cost_low_usd='12.345', estimated_cost_high_usd='12.345',
+                   incomplete_usage=True)
+        with patch.object(build, 'load_five', return_value=[packet]):
+            page = build.render()
+        self.assertIn('aria-label="at least $12.34, recorded usage subtotal">≥ $12.34', page)
+        self.assertIn('≥ marks a recorded-usage subtotal; total cost is unknown.', page)
+        obs['incomplete_usage'] = False
+        with patch.object(build, 'load_five', return_value=[packet]):
+            page = build.render()
+        self.assertNotIn('≥ marks a recorded-usage subtotal', page)
+        self.assertNotIn('recorded usage subtotal">≥', page)
+
+    def test_incomplete_range_uses_floored_low_endpoint(self):
+        model = next(iter(build.FIVE_FILES))
+        packet = fixture(model)
+        obs = packet['observations'][0]
+        for low, high, expected in (('1.119', '12.345', '$1.11'),
+                                    ('1.12', '12.345', '$1.12'),
+                                    ('12.345', '12.345', '$12.34')):
+            with self.subTest(low=low, high=high):
+                obs.update(estimated_cost_low_usd=low, estimated_cost_high_usd=high,
+                           incomplete_usage=True)
+                build.parse_five(*encode(packet), model)
+                with patch.object(build, 'load_five', return_value=[packet]):
+                    page = build.render()
+                self.assertIn('aria-label="at least ' + expected +
+                              ', recorded usage subtotal">≥ ' + expected, page)
+        obs.update(estimated_cost_low_usd='1.119', estimated_cost_high_usd='12.345',
+                   incomplete_usage=False)
+        build.parse_five(*encode(packet), model)
+        with patch.object(build, 'load_five', return_value=[packet]):
+            page = build.render()
+        self.assertIn('<strong>$12.35</strong>', page)
+        self.assertNotIn('recorded usage subtotal">≥', page)
 
     def test_decoder_and_rejections(self):
         for model in build.FIVE_FILES:

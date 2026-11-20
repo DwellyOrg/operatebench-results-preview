@@ -2,6 +2,8 @@
 import copy
 import json
 import itertools
+import html
+import re
 import shutil
 import tempfile
 import unittest
@@ -38,6 +40,37 @@ class FiveIntakeTests(unittest.TestCase):
             self.assertEqual(row['average_full_run_estimate']['mean_cost_high_usd'], cost)
             self.assertIn(model + ' observation aggregates (JSON)', files['index.html'].decode())
         self.assertIn('served setting is not independently attested', data['cost_assumptions'])
+
+    def test_counts_and_cost_scope_for_optional_models(self):
+        real = build.load_five()
+        other = [fixture(model) for model in list(build.FIVE_FILES)[2:]]
+        for packet in other:
+            packet['cost_assumptions'] = 'Synthetic scope for ' + packet['model'] + ' & test.'
+        scenarios = ([], real[:1], real[1:], real, real + other, other[:1])
+        for packets in scenarios:
+            with self.subTest(models=[p['model'] for p in packets]):
+                with patch.object(build, 'load_five', return_value=packets):
+                    page = build.render()
+                count = 32 + len(packets)
+                self.assertIn('both OpenAI 6.2 models have one observation each', page)
+                self.assertNotRegex(page, r'OpenAI 6\.(?:32|33|34|37) models')
+                self.assertIn(f'{count} models · sorted by quality', page)
+                self.assertIn(f'<strong>{count}</strong><span>models observed</span>', page)
+                scope = build.five_cost_scope(packets)
+                note = html.unescape(re.search(r'<p id="cost-note">(.*?)</p>', page).group(1))
+                data = json.loads(build.aggregate_data([], {'models': [], 'assumptions': 'BASE'}, five=packets))
+                self.assertTrue(note.startswith(scope))
+                self.assertEqual(data['cost_assumptions'], scope + 'BASE')
+                for assumption in {p['cost_assumptions'] for p in packets}:
+                    self.assertEqual(note.count(assumption), 1)
+                    self.assertEqual(data['cost_assumptions'].count(assumption), 1)
+                for model in ('gemini-4-hydrogen', 'gemini-4-neon'):
+                    prefix = scope.split('the served setting is not independently attested. ')[0] if 'the served setting is not independently attested. ' in scope else ''
+                    self.assertEqual(model in prefix, any(p['model'] == model for p in packets))
+                if not packets:
+                    self.assertEqual(scope, '')
+                if len(packets) == 5:
+                    self.assertIn('&amp; test.', page)
 
     def test_decoder_and_rejections(self):
         for model in build.FIVE_FILES:

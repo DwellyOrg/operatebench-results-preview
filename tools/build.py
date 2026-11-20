@@ -748,6 +748,15 @@ SELECTED_COST_SCOPE = ('The original 21 retain historical campaign tariffs and R
                        'All costs are estimates, not invoices. For the original 21 only: ')
 
 
+def five_cost_scope(packets):
+    groups = {}
+    for packet in packets:
+        groups.setdefault(packet['cost_assumptions'], []).append(packet['model'])
+    low = [p['model'] for p in packets if p['model'] in ('gemini-4-hydrogen', 'gemini-4-neon')]
+    note = ('For ' + ', '.join(low) + ', low thinking was requested; the served setting is not independently attested. ') if low else ''
+    return note + ''.join(', '.join(models) + ': ' + assumption + ' ' for assumption, models in groups.items())
+
+
 def render(rows=None):
     rows = average_rows(rows)
     costs = load_costs(r.model for r in rows)
@@ -781,7 +790,7 @@ def render(rows=None):
     template = (ROOT / 'tools/template.html').read_text()
     if packet:
         note = SELECTED_COST_SCOPE + costs['assumptions']
-        template = template.replace('21 models', f'{len(rows)} models').replace('<strong>21</strong>', f'<strong>{len(rows)}</strong>')
+        template = re.sub(r'(?<![\d.])\b21 models\b', f'{len(rows)} models', template).replace('<strong>21</strong>', f'<strong>{len(rows)}</strong>')
         template = template.replace('two original per-observation rates', 'one or two original per-observation rates')
         template = template.replace('with heterogeneous settings:', 'with heterogeneous runtime/evaluator versions and provider settings:')
         template = template.replace('descriptive, not a controlled ranking.',
@@ -797,7 +806,7 @@ def render(rows=None):
         template = template.replace('additional model aggregates</a>,', 'additional model aggregates</a> and <a href="./' + SELECTED_COST_FILE + '">current cost aggregates and assumptions</a>,')
     if november:
         note = NOVEMBER_COST_SCOPE + note
-        template = template.replace('21 models', f'{len(rows)} models').replace('<strong>21</strong>', f'<strong>{len(rows)}</strong>')
+        template = re.sub(r'(?<![\d.])\b21 models\b', f'{len(rows)} models', template).replace('<strong>21</strong>', f'<strong>{len(rows)}</strong>')
         template = template.replace('<footer>', '<footer><p><a href="./' + NOVEMBER_FILE + '">November observation aggregates</a></p>')
     if fable:
         note = FABLE_COST_SCOPE + note
@@ -807,17 +816,17 @@ def render(rows=None):
             'Fable 5.2 uses the best-quality of two runs (one whole observation); other models retain averages,')
         template = template.replace('Download model averages (JSON)', 'Download model summaries (JSON)')
         template = template.replace('/ Model averages', '/ Model summaries')
-        template = re.sub(r'\b\d+ models\b', f'{len(rows)} models', template)
+        template = re.sub(r'(?<![\d.])\b\d+ models\b', f'{len(rows)} models', template)
         template = re.sub(r'<strong>\d+</strong>', f'<strong>{len(rows)}</strong>', template, count=1)
         template = template.replace('<footer>', '<footer><p><a href="./' + FABLE_FILE + '">Fable observation aggregates</a></p>')
     if carbon:
         note = CARBON_COST_SCOPE + note
-        template = re.sub(r'\b\d+ models\b', f'{len(rows)} models', template)
+        template = re.sub(r'(?<![\d.])\b\d+ models\b', f'{len(rows)} models', template)
         template = re.sub(r'<strong>\d+</strong>', f'<strong>{len(rows)}</strong>', template, count=1)
         template = template.replace('<footer>', '<footer><p><a href="./' + CARBON_FILE + '">Carbon observation aggregates</a></p>')
     if openai62:
         note = OPENAI62_COST_SCOPE + ' '.join(p['cost_assumptions'] for p in openai62) + ' ' + note
-        template = re.sub(r'\b\d+ models\b', f'{len(rows)} models', template)
+        template = re.sub(r'(?<![\d.])\b\d+ models\b', f'{len(rows)} models', template)
         template = re.sub(r'<strong>\d+</strong>', f'<strong>{len(rows)}</strong>', template, count=1)
         if not packet:
             template = template.replace('two original per-observation rates', 'one or two original per-observation rates')
@@ -832,8 +841,8 @@ def render(rows=None):
         for new in openai62:
             template = template.replace('<footer>', '<footer><p><a href="./' + OPENAI62_FILES[new['model']] + '">' + escape(new['model']) + ' observation aggregates</a> · <a href="' + UPSTREAM + '/tree/' + new['source_revision'] + '">actual source revision</a></p>')
     if five:
-        note = ('For Hydrogen and Neon, low thinking was requested; the served setting is not independently attested. ' if any(p['model'] in ('gemini-4-hydrogen', 'gemini-4-neon') for p in five) else '') + ' '.join(p['cost_assumptions'] for p in five) + ' ' + note
-        template = re.sub(r'\b\d+ models\b', f'{len(rows)} models', template)
+        note = five_cost_scope(five) + note
+        template = re.sub(r'(?<![\d.])\b\d+ models\b', f'{len(rows)} models', template)
         template = re.sub(r'<strong>\d+</strong>', f'<strong>{len(rows)}</strong>', template, count=1)
         template = template.replace('two original per-observation rates', 'one or two original per-observation rates')
         template = template.replace('other models retain averages,', 'other models retain their existing aggregation,')
@@ -924,7 +933,7 @@ def aggregate_data(rows, costs, packet=None, november=None, fable=None, carbon=N
             value['method'] = value['method'].replace('mean of two original per-observation rates',
                                                        'mean of one or two original per-observation rates')
         value['method'] += ' Each additional intake model uses one observation.'
-        value['cost_assumptions'] = ('For Hydrogen and Neon, low thinking was requested; the served setting is not independently attested. ' if any(p['model'] in ('gemini-4-hydrogen', 'gemini-4-neon') for p in five) else '') + ' '.join(p['cost_assumptions'] for p in five) + ' ' + value['cost_assumptions']
+        value['cost_assumptions'] = five_cost_scope(five) + value['cost_assumptions']
         value['five_provenance'] = [dict(packet=FIVE_FILES[p['model']],
             sha256=FIVE_DIGESTS[p['model']], source_url=f"{UPSTREAM}/tree/{p['source_revision']}",
             source_urls=[f"{UPSTREAM}/tree/{revision}" for revision in [p['source_revision']] + p.get('additional_source_revisions', [])],

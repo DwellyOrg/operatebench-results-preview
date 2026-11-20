@@ -218,7 +218,7 @@ class AverageTests(unittest.TestCase):
                          {r['model']:r for r in costs['models']})
         html = outputs['index.html'].decode()
         notice = (build.ROOT/'NOTICE').read_text()
-        for text in ('35 summary rows (23 two-observation means, eleven single-observation rates and one best-of-two Fable selection): site/MODEL_AVERAGES.json',
+        for text in ('36 summary rows (23 two-observation means, twelve single-observation rates and one best-of-two Fable selection): site/MODEL_AVERAGES.json',
                      'source/AVERAGE_COSTS.json and its site/AVERAGE_COSTS.json copy.',
                      'These data and the site results content are CC BY 4.0, owned by',
                      'Prospire Technologies Ltd.',

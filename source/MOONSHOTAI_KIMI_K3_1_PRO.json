@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "model": "moonshotai/Kimi-K3.1-Pro",
+  "provider": "river_http",
+  "endpoint": "chat_completions",
+  "reasoning": "none",
+  "currency": "USD",
+  "pricing_basis": "official_current_tariff_estimate",
+  "case_set": "same-44-cases",
+  "source_revision": "1fdb4a470231088cb05adf3daa4fb867e228d02a",
+  "additional_source_revisions": [
+    "9e7464c1924432787c8ba8582cde42aa5d058d20"
+  ],
+  "date": "2026-11-20",
+  "cost_assumptions": "One observation on the same 44 cases with reasoning off. Reported token estimate uses River published input and output prices captured on 19 November 2026. All reported cached input and reasoning output counters were zero. The observed amount includes retained usage from all 89 attempts and is a lower bound on the reported usage estimate, not an upper bound on total cost. The 41 unpriced rate limit responses and four interrupted attempts retain unknown usage and liability; one interrupted request has no journal reservation. Unknown reservation exposure is not added to observed cost. Additional fees and invoice are unknown. Results from one observation are not a statistical performance estimate. Later corrections used their original frozen source and evaluator.",
+  "observations": [
+    {
+      "id": "observation-1",
+      "assigned": 44,
+      "scored": 44,
+      "excluded": 0,
+      "aborted": 0,
+      "goal_completed": 6,
+      "reliable": 2,
+      "estimated_cost_low_usd": "203.819236",
+      "estimated_cost_high_usd": "203.819236",
+      "incomplete_usage": true
+    }
+  ]
+}

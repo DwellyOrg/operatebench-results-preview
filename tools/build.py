@@ -386,7 +386,7 @@ FIVE_DIGESTS = {
     'gemini-4-neon': 'd44eee5ef1a5b6d8aae10c3daae2c8409bfcb2c7621f816a246c9e0d25427435',
     'muse-ember-1.0': '1ad27648d23ca03e49e0b052b75c86f3faf78deae508cbc448fa2bffe3de45bc',
     'ricursiveAI/Ripple-65B-Preview-NVFP4': None,
-    'moonshotai/Kimi-K3.1-Pro': None,
+    'moonshotai/Kimi-K3.1-Pro': 'feda7a97b812294a2706defd40e504ba9bffdccfcb9a5d1fce01c43b65c78b6f',
 }
 
 
@@ -694,16 +694,21 @@ def money(row):
     return f'${value:.2f}'
 
 
-def render_chart(rows, costs, packet=None, fable=None):
+def render_chart(rows, costs, packet=None, fable=None, five=()):
     # Goal achievement includes strict-quality cases: overlay, never add the rates.
     by_model = {r['model']: r for r in costs['models']}
     bars = []
+    incomplete_five = {p['model'] for p in five if any(
+        o['incomplete_usage'] for o in p['observations'])}
     for rank, row in enumerate(rows, 1):
         quality = Decimal(row.quality.numerator) * 100 / row.quality.denominator
         goal = Decimal(row.goal.numerator) * 100 / row.goal.denominator
         label = '<code>' + escape(row.model) + '</code>'
         if packet:
             label = '<span>' + label + '</span>'
+        cost = escape(money(by_model[row.model]))
+        if row.model in incomplete_five:
+            cost = '<span aria-label="at least ' + cost + ', recorded usage subtotal">≥ ' + cost + '</span>'
         bars.append('<li class="chart-row"><div class="chart-model">'
             f'<span class="chart-rank" aria-hidden="true">{rank:02d}</span>'
             + label + '</div>'
@@ -717,7 +722,7 @@ def render_chart(rows, costs, packet=None, fable=None):
             '<span class="chart-stat goal-stat"><span class="metric-label">Tasks solved</span>'
             '<strong>' + percent(row.goal) + '</strong></span>'
             '<span class="chart-stat chart-cost"><span class="metric-label">Est. run cost</span>'
-            '<strong>' + escape(money(by_model[row.model])) + '</strong></span></li>')
+            '<strong>' + cost + '</strong></span></li>')
     chart = ('<figure class="leaderboard" aria-labelledby="chart-title" aria-describedby="chart-note method">'
             '<figcaption id="chart-title">Quality, tasks solved &amp; cost</figcaption>'
             '<div class="chart-key"><span><i class="quality-key" aria-hidden="true"></i>Strict quality</span>'
@@ -730,6 +735,8 @@ def render_chart(rows, costs, packet=None, fable=None):
             '<span>Quality ↓</span><span>Tasks solved</span><span>Est. run cost</span></div>'
             '<ol class="chart">' + ''.join(bars) + '</ol></figure>')
 
+    if incomplete_five:
+        chart = chart.replace('</ol></figure>', '</ol><p>≥ marks a recorded-usage subtotal; total cost is unknown.</p></figure>')
     if fable:
         chart = chart.replace('Both are average percentages across two observations.',
             'Percentages follow the per-model methodology in Methodology &amp; sources below.')
@@ -852,7 +859,7 @@ def render(rows=None):
             refs = ''.join(' · <a href="' + UPSTREAM + '/tree/' + revision + '">additional technical source ' + revision + ' for ' + escape(new['model']) + '</a>'
                            for revision in new.get('additional_source_revisions', []))
             template = template.replace('<footer>', '<footer><p><a href="./' + FIVE_FILES[new['model']] + '">' + escape(new['model']) + ' observation aggregates (JSON)</a> · <a href="' + UPSTREAM + '/tree/' + new['source_revision'] + '">primary actual source revision for ' + escape(new['model']) + '</a>' + refs + '</p>')
-    chart = render_chart(rows, costs, packet, fable)
+    chart = render_chart(rows, costs, packet, fable, five)
     if openai62:
         for text in ('Percentages follow the per-model methodology in Methodology &amp; sources below.',
                      'Both are average percentages across one or two observations.',

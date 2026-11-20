@@ -38,6 +38,7 @@ def encode(value):
 @patch.object(build, 'load_carbon', new=lambda: None)
 # Historical intake assertions retain their exact original census and goldens.
 @patch.object(build, 'load_openai62', new=lambda: [])
+@patch.object(build, 'load_five', new=lambda: [])
 class NovemberTests(unittest.TestCase):
     @patch.object(build, 'load_fable', new=lambda: None)
     def test_absent_parity(self):

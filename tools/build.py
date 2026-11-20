@@ -373,6 +373,49 @@ def load_openai62():
     return packets
 
 
+# Approved packets require individual byte pins; other models remain inactive.
+FIVE_FILES = {
+    'gemini-4-hydrogen': 'GEMINI_4_HYDROGEN.json',
+    'gemini-4-neon': 'GEMINI_4_NEON.json',
+    'muse-ember-1.0': 'MUSE_EMBER_1_0.json',
+    'ricursiveAI/Ripple-65B-Preview-NVFP4': 'RICURSIVEAI_RIPPLE_65B_PREVIEW_NVFP4.json',
+    'moonshotai/Kimi-K3.1-Pro': 'MOONSHOTAI_KIMI_K3_1_PRO.json',
+}
+FIVE_DIGESTS = {
+    'gemini-4-hydrogen': '6cc8dcbac6f9cfb993c8c9b25cacaf17fc80ec852618f00e029b2c0ce4d5ee73',
+    'gemini-4-neon': 'd44eee5ef1a5b6d8aae10c3daae2c8409bfcb2c7621f816a246c9e0d25427435',
+    'muse-ember-1.0': None,
+    'ricursiveAI/Ripple-65B-Preview-NVFP4': None,
+    'moonshotai/Kimi-K3.1-Pro': None,
+}
+
+
+def parse_five(data, digest, model):
+    if model not in FIVE_FILES:
+        raise ValueError('Unexpected intake model')
+    # These metadata identify the actual approved run, rather than guessing its route.
+    value = json.loads(data, object_pairs_hook=unique_fields)
+    if type(value) is not dict or any(type(value.get(k)) is not str or
+            not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}', value[k])
+            for k in ('provider', 'endpoint', 'reasoning')):
+        raise ValueError('Invalid intake route metadata')
+    return _parse_observations(data, digest, model, value['reasoning'], label='Intake',
+        ids={'observation-1'}, provider=value['provider'], endpoint=value['endpoint'],
+        observation_count=1, cost_assumptions=True, additional_sources=True)
+
+
+def load_five():
+    packets = []
+    for model, filename in FIVE_FILES.items():
+        path, pin = ROOT / 'source' / filename, FIVE_DIGESTS[model]
+        if not path.exists() and pin is None:
+            continue
+        if not path.exists():
+            raise ValueError('Approved intake packet missing')
+        packets.append(parse_five(path.read_bytes(), pin, model))
+    return packets
+
+
 def parse_carbon(data, digest):
     return _parse_observations(data, digest, CARBON_MODEL, 'low',
         label='Carbon', fixed_date='2026-11-11',
@@ -399,7 +442,8 @@ def parse_fable(data, digest):
 
 
 def _parse_observations(data, digest, model, reasoning, label='November', fixed_date=None, ids=None,
-                        provider='anthropic', endpoint='messages', observation_count=2, cost_assumptions=False):
+                        provider='anthropic', endpoint='messages', observation_count=2, cost_assumptions=False,
+                        additional_sources=False):
     if type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest):
         raise ValueError(f'{label} requires an approved byte pin')
     raw = data.encode() if isinstance(data, str) else data
@@ -411,6 +455,7 @@ def _parse_observations(data, digest, model, reasoning, label='November', fixed_
         pricing_basis='official_current_tariff_estimate', case_set='same-44-cases')
     if (type(value) is not dict or set(value) != set(literals) | {
             'source_revision', 'date', 'observations'} | ({'cost_assumptions'} if cost_assumptions else set())
+            | ({'additional_source_revisions'} if additional_sources and 'additional_source_revisions' in value else set())
             or any(type(value[k]) is not type(v) or value[k] != v for k, v in literals.items())
             or type(value['source_revision']) is not str
             or not re.fullmatch(r'[0-9a-f]{40}', value['source_revision'])
@@ -418,6 +463,12 @@ def _parse_observations(data, digest, model, reasoning, label='November', fixed_
             or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value['date'])
             or type(value['observations']) is not list or len(value['observations']) != observation_count):
         raise ValueError(f'Invalid {label} metadata or observation census')
+    if additional_sources and 'additional_source_revisions' in value:
+        revisions = value['additional_source_revisions']
+        if (type(revisions) is not list or not revisions
+                or any(type(r) is not str or not re.fullmatch(r'[0-9a-f]{40}', r) for r in revisions)
+                or len(set(revisions)) != len(revisions) or value['source_revision'] in revisions):
+            raise ValueError('Invalid additional source revisions')
     if cost_assumptions and (type(value['cost_assumptions']) is not str
             or not 1 <= len(value['cost_assumptions']) <= 2000
             or any(c in value['cost_assumptions'] for c in ('/', '\\', '<', '>', '\n', '\r'))):
@@ -721,6 +772,10 @@ def render(rows=None):
     for new in openai62:
         rows = sorted(rows + [november_average(new)], key=average_order)
         costs = dict(costs, models=costs['models'] + [november_cost(new)])
+    five = load_five()
+    for new in five:
+        rows = sorted(rows + [november_average(new)], key=average_order)
+        costs = dict(costs, models=costs['models'] + [november_cost(new)])
     note = ('Known 44-case campaign estimates including known retries, not invoices. Some estimates have incomplete recorded usage. '
             + costs['assumptions'])
     template = (ROOT / 'tools/template.html').read_text()
@@ -776,6 +831,18 @@ def render(rows=None):
             'the six additional models and both OpenAI 6.2 models have one observation each.')
         for new in openai62:
             template = template.replace('<footer>', '<footer><p><a href="./' + OPENAI62_FILES[new['model']] + '">' + escape(new['model']) + ' observation aggregates</a> · <a href="' + UPSTREAM + '/tree/' + new['source_revision'] + '">actual source revision</a></p>')
+    if five:
+        note = ('For Hydrogen and Neon, low thinking was requested; the served setting is not independently attested. ' if any(p['model'] in ('gemini-4-hydrogen', 'gemini-4-neon') for p in five) else '') + ' '.join(p['cost_assumptions'] for p in five) + ' ' + note
+        template = re.sub(r'\b\d+ models\b', f'{len(rows)} models', template)
+        template = re.sub(r'<strong>\d+</strong>', f'<strong>{len(rows)}</strong>', template, count=1)
+        template = template.replace('two original per-observation rates', 'one or two original per-observation rates')
+        template = template.replace('other models retain averages,', 'other models retain their existing aggregation,')
+        template = template.replace('descriptive, not a controlled ranking.',
+            'descriptive, not a controlled ranking. Additional intake models use one observation each.')
+        for new in five:
+            refs = ''.join(' · <a href="' + UPSTREAM + '/tree/' + revision + '">additional technical source ' + revision + ' for ' + escape(new['model']) + '</a>'
+                           for revision in new.get('additional_source_revisions', []))
+            template = template.replace('<footer>', '<footer><p><a href="./' + FIVE_FILES[new['model']] + '">' + escape(new['model']) + ' observation aggregates (JSON)</a> · <a href="' + UPSTREAM + '/tree/' + new['source_revision'] + '">primary actual source revision for ' + escape(new['model']) + '</a>' + refs + '</p>')
     chart = render_chart(rows, costs, packet, fable)
     if openai62:
         for text in ('Percentages follow the per-model methodology above.',
@@ -783,6 +850,12 @@ def render(rows=None):
                      'Both are average percentages across two observations.'):
             chart = chart.replace(text,
                 'OpenAI 6.2 percentages use one observation; other percentages follow the per-model methodology above.')
+    if five:
+        for text in ('Percentages follow the per-model methodology above.',
+                     'Both are average percentages across one or two observations.',
+                     'Both are average percentages across two observations.',
+                     'OpenAI 6.2 percentages use one observation; other percentages follow the per-model methodology above.'):
+            chart = chart.replace(text, 'Percentages follow the per-model methodology above; additional intake models use one observation each.')
     for key, value in {'DOC': DOC, 'SHA': SHA, 'UPSTREAM': UPSTREAM,
                        'STYLE_VERSION': sha256((ROOT / 'tools/style.css').read_bytes()).hexdigest()[:12],
                        'RESULTS': chart, 'COST_NOTE': escape(note)}.items():
@@ -790,7 +863,7 @@ def render(rows=None):
     return template
 
 
-def aggregate_data(rows, costs, packet=None, november=None, fable=None, carbon=None, openai62=()):
+def aggregate_data(rows, costs, packet=None, november=None, fable=None, carbon=None, openai62=(), five=()):
     by_model = {r['model']: r for r in costs['models']}
     value = {'schema_version': 1,
         'method': 'Unweighted mean of two original per-observation rates; exact rational arithmetic.',
@@ -846,6 +919,19 @@ def aggregate_data(rows, costs, packet=None, november=None, fable=None, carbon=N
         for row in value['models']:
             if row['model'] in OPENAI62_FILES:
                 row['observation_count'] = 1
+    if five:
+        if not packet:
+            value['method'] = value['method'].replace('mean of two original per-observation rates',
+                                                       'mean of one or two original per-observation rates')
+        value['method'] += ' Each additional intake model uses one observation.'
+        value['cost_assumptions'] = ('For Hydrogen and Neon, low thinking was requested; the served setting is not independently attested. ' if any(p['model'] in ('gemini-4-hydrogen', 'gemini-4-neon') for p in five) else '') + ' '.join(p['cost_assumptions'] for p in five) + ' ' + value['cost_assumptions']
+        value['five_provenance'] = [dict(packet=FIVE_FILES[p['model']],
+            sha256=FIVE_DIGESTS[p['model']], source_url=f"{UPSTREAM}/tree/{p['source_revision']}",
+            source_urls=[f"{UPSTREAM}/tree/{revision}" for revision in [p['source_revision']] + p.get('additional_source_revisions', [])],
+            **{k: v for k, v in p.items() if k != 'observations'}) for p in five]
+        for row in value['models']:
+            if row['model'] in FIVE_FILES:
+                row['observation_count'] = 1
     return (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode()
 
 
@@ -873,8 +959,12 @@ def outputs():
     for new in openai62:
         rows = sorted(rows + [november_average(new)], key=average_order)
         costs = dict(costs, models=costs['models'] + [november_cost(new)])
+    five = load_five()
+    for new in five:
+        rows = sorted(rows + [november_average(new)], key=average_order)
+        costs = dict(costs, models=costs['models'] + [november_cost(new)])
     files = {'index.html': render().encode(),
-            'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet, november, fable, carbon, openai62),
+            'MODEL_AVERAGES.json': aggregate_data(rows, costs, packet, november, fable, carbon, openai62, five),
             'REPEAT_20261024.json': (ROOT / 'source/REPEAT_20261024.json').read_bytes(),
             'GEMINI_AGGREGATES.json': (ROOT / 'source/GEMINI_AGGREGATES.json').read_bytes(),
             'favicon.svg': (ROOT / 'tools/favicon.svg').read_bytes(),
@@ -908,6 +998,11 @@ def outputs():
         raw = (ROOT / 'source' / OPENAI62_FILES[model]).read_bytes()
         parse_openai62(raw, OPENAI62_DIGESTS[model], model)
         files[OPENAI62_FILES[model]] = raw
+    for new in five:
+        model = new['model']
+        raw = (ROOT / 'source' / FIVE_FILES[model]).read_bytes()
+        parse_five(raw, FIVE_DIGESTS[model], model)
+        files[FIVE_FILES[model]] = raw
     return files
 
 

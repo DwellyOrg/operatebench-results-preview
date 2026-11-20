@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "method": "Unweighted mean of one or two per-observation rates; technical corrections replace original technical cells; exact rational arithmetic. Fable 5.2 instead uses one whole best-quality observation of two, ordered by exact quality rate, goal rate, then observation ID. Each OpenAI 6.2 model uses one observation.",
-  "cost_assumptions": "OpenAI 6.2 costs estimate known recorded token usage at Standard and cache-TTL rates for one 44-case observation with declared technical-recovery inclusion. Missing usage remains unknown; no extrapolation is applied. These are estimates, not invoices. gpt-6.2-astra: estimate includes all recorded token usage in the scored observation and 44 retained technical first-response attempts. Their known overhead is 1.7911276 USD. Explicit cache TTL partitions are used; reasoning is already included in output. Additional fees unknown; not an invoice. gpt-6.2-sol: estimate includes all recorded token usage in the scored observation and 44 retained technical first-response attempts. Their known overhead is 0.4501136 USD. Explicit cache TTL partitions are used; reasoning is already included in output. Additional fees unknown; not an invoice. Carbon costs average reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. Fable costs use the selected best-quality observation’s reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. November costs average reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. The original 21 retain historical campaign tariffs and River owner scenarios, including known retries. Some estimates have incomplete recorded usage. The six additional estimates use official current API rates as of 2026-10-30; gpt-6.1-terra covers complete recorded usage. claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. All costs are estimates, not invoices. For the original 21 only: River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
+  "method": "Unweighted mean of one or two per-observation rates; technical corrections replace original technical cells; exact rational arithmetic. Fable 5.2 instead uses one whole best-quality observation of two, ordered by exact quality rate, goal rate, then observation ID. Each OpenAI 6.2 model uses one observation. Each additional intake model uses one observation.",
+  "cost_assumptions": "For Hydrogen and Neon, low thinking was requested; the served setting is not independently attested. One observation on the same 44 cases. Low thinking requested on the native Google API. Estimated pre-tax USD from reported input, implicit cache and output tokens at published Standard rates; thinking is counted once within output. All attempts included. No paid grounding tools. Additional fees are unknown; this is not an invoice. One observation on the same 44 cases. Low thinking requested on the native Google API. Estimated pre-tax USD from reported input, implicit cache and output tokens at published Standard rates; thinking is counted once within output. All attempts included. No paid grounding tools. Additional fees are unknown; this is not an invoice. OpenAI 6.2 costs estimate known recorded token usage at Standard and cache-TTL rates for one 44-case observation with declared technical-recovery inclusion. Missing usage remains unknown; no extrapolation is applied. These are estimates, not invoices. gpt-6.2-astra: estimate includes all recorded token usage in the scored observation and 44 retained technical first-response attempts. Their known overhead is 1.7911276 USD. Explicit cache TTL partitions are used; reasoning is already included in output. Additional fees unknown; not an invoice. gpt-6.2-sol: estimate includes all recorded token usage in the scored observation and 44 retained technical first-response attempts. Their known overhead is 0.4501136 USD. Explicit cache TTL partitions are used; reasoning is already included in output. Additional fees unknown; not an invoice. Carbon costs average reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. Fable costs use the selected best-quality observation’s reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. November costs average reported-usage estimates for one 44-case observation at official current tariffs; stand-alone diagnostics are excluded from costs and quality; missing usage is excluded. These are estimates, not invoices. The original 21 retain historical campaign tariffs and River owner scenarios, including known retries. Some estimates have incomplete recorded usage. The six additional estimates use official current API rates as of 2026-10-30; gpt-6.1-terra covers complete recorded usage. claude-haiku-5-5, mistral-large-4, grok-4.7, GLM-5.3, moonshotai/Kimi-K3 cover retained recorded usage only; missing usage is excluded. All costs are estimates, not invoices. For the original 21 only: River uses owner-selected $0.12/$0.01/$0.50 per million input/cached-input/output tokens; ranges compare hypothetical all-cached versus no-cache usage. Other estimates retain campaign tariffs.",
   "models": [
     {
       "model": "gpt-6.2-sol",
@@ -126,6 +126,27 @@
         "incomplete_usage": false,
         "mean_cost_low_usd": "38.5159988",
         "mean_cost_high_usd": "38.5159988"
+      },
+      "observation_count": 1
+    },
+    {
+      "model": "gemini-4-neon",
+      "average_quality_percent": "88.6%",
+      "average_goal_achieved_percent": "100.0%",
+      "quality_rate": {
+        "numerator": 39,
+        "denominator": 44
+      },
+      "goal_rate": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "average_full_run_estimate": {
+        "model": "gemini-4-neon",
+        "pricing_basis": "official_current_tariff_estimate",
+        "incomplete_usage": false,
+        "mean_cost_low_usd": "109.913439",
+        "mean_cost_high_usd": "109.913439"
       },
       "observation_count": 1
     },
@@ -320,6 +341,27 @@
         "pricing_basis": "retained_tariff_estimate"
       },
       "observation_count": 2
+    },
+    {
+      "model": "gemini-4-hydrogen",
+      "average_quality_percent": "22.7%",
+      "average_goal_achieved_percent": "100.0%",
+      "quality_rate": {
+        "numerator": 5,
+        "denominator": 22
+      },
+      "goal_rate": {
+        "numerator": 1,
+        "denominator": 1
+      },
+      "average_full_run_estimate": {
+        "model": "gemini-4-hydrogen",
+        "pricing_basis": "official_current_tariff_estimate",
+        "incomplete_usage": false,
+        "mean_cost_low_usd": "56.285823",
+        "mean_cost_high_usd": "56.285823"
+      },
+      "observation_count": 1
     },
     {
       "model": "GLM-5.3",
@@ -954,6 +996,46 @@
       "source_revision": "89bb9f6342c5f23c1fd031b84f56d805195dbe28",
       "date": "2026-11-17",
       "cost_assumptions": "gpt-6.2-sol: estimate includes all recorded token usage in the scored observation and 44 retained technical first-response attempts. Their known overhead is 0.4501136 USD. Explicit cache TTL partitions are used; reasoning is already included in output. Additional fees unknown; not an invoice."
+    }
+  ],
+  "five_provenance": [
+    {
+      "packet": "GEMINI_4_HYDROGEN.json",
+      "sha256": "6cc8dcbac6f9cfb993c8c9b25cacaf17fc80ec852618f00e029b2c0ce4d5ee73",
+      "source_url": "https://github.com/DwellyOrg/OperateBench/tree/1fdb4a470231088cb05adf3daa4fb867e228d02a",
+      "source_urls": [
+        "https://github.com/DwellyOrg/OperateBench/tree/1fdb4a470231088cb05adf3daa4fb867e228d02a"
+      ],
+      "schema_version": 1,
+      "model": "gemini-4-hydrogen",
+      "provider": "gemini",
+      "endpoint": "generateContent",
+      "reasoning": "low",
+      "currency": "USD",
+      "pricing_basis": "official_current_tariff_estimate",
+      "case_set": "same-44-cases",
+      "source_revision": "1fdb4a470231088cb05adf3daa4fb867e228d02a",
+      "date": "2026-11-19",
+      "cost_assumptions": "One observation on the same 44 cases. Low thinking requested on the native Google API. Estimated pre-tax USD from reported input, implicit cache and output tokens at published Standard rates; thinking is counted once within output. All attempts included. No paid grounding tools. Additional fees are unknown; this is not an invoice."
+    },
+    {
+      "packet": "GEMINI_4_NEON.json",
+      "sha256": "d44eee5ef1a5b6d8aae10c3daae2c8409bfcb2c7621f816a246c9e0d25427435",
+      "source_url": "https://github.com/DwellyOrg/OperateBench/tree/1fdb4a470231088cb05adf3daa4fb867e228d02a",
+      "source_urls": [
+        "https://github.com/DwellyOrg/OperateBench/tree/1fdb4a470231088cb05adf3daa4fb867e228d02a"
+      ],
+      "schema_version": 1,
+      "model": "gemini-4-neon",
+      "provider": "gemini",
+      "endpoint": "generateContent",
+      "reasoning": "low",
+      "currency": "USD",
+      "pricing_basis": "official_current_tariff_estimate",
+      "case_set": "same-44-cases",
+      "source_revision": "1fdb4a470231088cb05adf3daa4fb867e228d02a",
+      "date": "2026-11-19",
+      "cost_assumptions": "One observation on the same 44 cases. Low thinking requested on the native Google API. Estimated pre-tax USD from reported input, implicit cache and output tokens at published Standard rates; thinking is counted once within output. All attempts included. No paid grounding tools. Additional fees are unknown; this is not an invoice."
     }
   ]
 }

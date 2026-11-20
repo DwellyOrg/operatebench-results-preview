@@ -45,6 +45,7 @@ def fixture():
 @patch.object(build, 'load_carbon', new=lambda: None)
 # Historical intake assertions retain their exact original census and goldens.
 @patch.object(build, 'load_openai62', new=lambda: [])
+@patch.object(build, 'load_five', new=lambda: [])
 class AverageTests(unittest.TestCase):
     def test_independent_means_and_order(self):
         rows = build.average_rows(); by_id = {r.model:r for r in rows}
@@ -166,7 +167,7 @@ class AverageTests(unittest.TestCase):
                          {r['model']:r for r in costs['models']})
         html = outputs['index.html'].decode()
         notice = (build.ROOT/'NOTICE').read_text()
-        for text in ('32 summary rows (23 two-observation means, eight single-observation rates and one best-of-two Fable selection): site/MODEL_AVERAGES.json',
+        for text in ('34 summary rows (23 two-observation means, ten single-observation rates and one best-of-two Fable selection): site/MODEL_AVERAGES.json',
                      'source/AVERAGE_COSTS.json and its site/AVERAGE_COSTS.json copy.',
                      'These data and the site results content are CC BY 4.0, owned by',
                      'Prospire Technologies Ltd.',

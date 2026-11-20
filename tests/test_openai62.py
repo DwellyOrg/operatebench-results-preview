@@ -60,6 +60,7 @@ def encode(value):
     return raw, sha256(raw).hexdigest()
 
 
+@patch.object(build, 'load_five', new=lambda: [])
 class OpenAI62Tests(unittest.TestCase):
     def test_closed_schema_and_pins(self):
         for model in build.OPENAI62_FILES:

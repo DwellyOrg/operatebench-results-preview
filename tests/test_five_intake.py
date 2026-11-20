@@ -16,44 +16,54 @@ from test_openai62 import fixture, encode
 
 
 class FiveIntakeTests(unittest.TestCase):
-    def test_approved_hydrogen_and_neon(self):
+    def test_approved_three_packets(self):
         expected = {
-            'gemini-4-hydrogen': (10, '56.285823', '6cc8dcbac6f9cfb993c8c9b25cacaf17fc80ec852618f00e029b2c0ce4d5ee73'),
-            'gemini-4-neon': (39, '109.913439', 'd44eee5ef1a5b6d8aae10c3daae2c8409bfcb2c7621f816a246c9e0d25427435'),
+            'gemini-4-hydrogen': (44, 10, '56.285823', '6cc8dcbac6f9cfb993c8c9b25cacaf17fc80ec852618f00e029b2c0ce4d5ee73'),
+            'gemini-4-neon': (44, 39, '109.913439', 'd44eee5ef1a5b6d8aae10c3daae2c8409bfcb2c7621f816a246c9e0d25427435'),
+            'muse-ember-1.0': (22, 9, '1.329589588', '1ad27648d23ca03e49e0b052b75c86f3faf78deae508cbc448fa2bffe3de45bc'),
         }
         files = build.outputs()
         data = json.loads(files['MODEL_AVERAGES.json'])
-        self.assertEqual(len(data['models']), 34)
+        self.assertEqual(len(data['models']), 35)
         self.assertEqual({p['model'] for p in build.load_five()}, set(expected))
-        self.assertEqual(len(files), 19)
+        self.assertEqual(len(files), 20)
         self.assertIn('.nojekyll', files)
-        for model, (reliable, cost, pin) in expected.items():
+        for model, (goal, reliable, cost, pin) in expected.items():
             raw = (build.ROOT / 'source' / build.FIVE_FILES[model]).read_bytes()
             self.assertEqual(sha256(raw).hexdigest(), pin)
             self.assertEqual(files[build.FIVE_FILES[model]], raw)
             packet = build.parse_five(raw, pin, model)
             self.assertEqual(packet['source_revision'], '1fdb4a470231088cb05adf3daa4fb867e228d02a')
             obs = packet['observations'][0]
-            self.assertEqual((obs['assigned'], obs['scored'], obs['goal_completed'], obs['reliable']), (44, 44, 44, reliable))
+            self.assertEqual((obs['assigned'], obs['scored'], obs['goal_completed'], obs['reliable']), (44, 44, goal, reliable))
             row = next(row for row in data['models'] if row['model'] == model)
             self.assertEqual(row['observation_count'], 1)
             self.assertEqual(row['average_full_run_estimate']['mean_cost_high_usd'], cost)
             self.assertIn(model + ' observation aggregates (JSON)', files['index.html'].decode())
         self.assertIn('served setting is not independently attested', data['cost_assumptions'])
+        ember = next(p for p in data['five_provenance'] if p['model'] == 'muse-ember-1.0')
+        self.assertEqual(ember['additional_source_revisions'], ['9e7464c1924432787c8ba8582cde42aa5d058d20'])
+        self.assertEqual(len(ember['source_urls']), 2)
+        for url in ember['source_urls']:
+            self.assertIn('href="' + url + '"', files['index.html'].decode())
+        packet = build.parse_five(files[build.FIVE_FILES['muse-ember-1.0']], expected['muse-ember-1.0'][3], 'muse-ember-1.0')
+        self.assertIn(packet['cost_assumptions'], data['cost_assumptions'])
+        for disclosure in ('Conditional pre-tax estimate', 'does not independently attest account billing mode', 'Additional fees and invoice totals are unknown'):
+            self.assertIn(disclosure, packet['cost_assumptions'])
 
     def test_counts_and_cost_scope_for_optional_models(self):
         real = build.load_five()
-        other = [fixture(model) for model in list(build.FIVE_FILES)[2:]]
+        other = [fixture(model) for model in build.FIVE_FILES if model not in {p['model'] for p in real}]
         for packet in other:
             packet['cost_assumptions'] = 'Synthetic scope for ' + packet['model'] + ' & test.'
-        scenarios = ([], real[:1], real[1:], real, real + other, other[:1])
+        scenarios = ([], real[:1], real[1:2], real[2:3], real[:2], real, real + other, other[:1])
         for packets in scenarios:
             with self.subTest(models=[p['model'] for p in packets]):
                 with patch.object(build, 'load_five', return_value=packets):
                     page = build.render()
                 count = 32 + len(packets)
                 self.assertIn('both OpenAI 6.2 models have one observation each', page)
-                self.assertNotRegex(page, r'OpenAI 6\.(?:32|33|34|37) models')
+                self.assertNotRegex(page, r'OpenAI 6\.(?:32|33|34|35|37) models')
                 self.assertIn(f'{count} models · sorted by quality', page)
                 self.assertIn(f'<strong>{count}</strong><span>models observed</span>', page)
                 scope = build.five_cost_scope(packets)

@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 from tools import build
+from test_averages import historical_ui_bytes
 
 # SHA-256 goldens for the public, disabled-November generated outputs.
 PUBLIC_GOLDENS = {
@@ -52,7 +53,7 @@ class NovemberTests(unittest.TestCase):
                 self.assertIsNone(build.load_november())
                 files = build.outputs()
         for name, pin in PUBLIC_GOLDENS.items():
-            self.assertEqual(sha256(files[name]).hexdigest(), pin)
+            self.assertEqual(sha256(historical_ui_bytes(name, files[name])).hexdigest(), pin)
         rows = json.loads(files['MODEL_AVERAGES.json'])['models']
         self.assertEqual(len(rows), 27)
         self.assertEqual(len({r['model'] for r in rows}), 27)

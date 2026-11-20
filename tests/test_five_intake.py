@@ -4,6 +4,7 @@ import json
 import itertools
 import html
 import re
+from html.parser import HTMLParser
 import shutil
 import tempfile
 import unittest
@@ -13,6 +14,41 @@ from unittest.mock import patch
 
 from tools import build
 from test_openai62 import fixture, encode
+
+
+class DetailsParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.details = []
+        self.footer_links = []
+        self.in_footer = False
+        self.in_details = False
+        self.in_summary = False
+        self.text = []
+        self.summary = ''
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == 'details':
+            self.details.append((attrs, []))
+            self.in_details = True
+        if tag == 'summary' and self.in_details:
+            self.in_summary = True
+        if tag == 'footer':
+            self.in_footer = True
+        if tag == 'a' and self.in_details:
+            self.details[-1][1].append(attrs.get('href'))
+        if tag == 'a' and self.in_footer:
+            self.footer_links.append(attrs.get('href'))
+
+    def handle_endtag(self, tag):
+        if tag == 'summary': self.in_summary = False
+        if tag == 'details': self.in_details = False
+        if tag == 'footer': self.in_footer = False
+
+    def handle_data(self, data):
+        if self.in_details: self.text.append(data)
+        if self.in_summary: self.summary += data
 
 
 class FiveIntakeTests(unittest.TestCase):
@@ -81,6 +117,33 @@ class FiveIntakeTests(unittest.TestCase):
                     self.assertEqual(scope, '')
                 if len(packets) == 5:
                     self.assertIn('&amp; test.', page)
+
+    def test_collapsed_methodology_contains_full_provenance(self):
+        real = build.load_five()
+        synthetic = [fixture(model) for model in build.FIVE_FILES if model not in {p['model'] for p in real}]
+        for packets in ([], real[:1], real + synthetic):
+            with self.subTest(models=[p['model'] for p in packets]), patch.object(build, 'load_five', return_value=packets):
+                page = build.render()
+                doc = DetailsParser(); doc.feed(page)
+                self.assertEqual(len(doc.details), 1)
+                attrs, links = doc.details[0]
+                self.assertNotIn('open', attrs)
+                self.assertEqual(doc.summary, 'Methodology & sources')
+                self.assertIn('./MODEL_AVERAGES.json', links)
+                self.assertIn('./AVERAGE_COSTS.json', links)
+                self.assertIn('./LICENSE-DATA', links)
+                self.assertIn('creativecommons.org/licenses/by/4.0/', ' '.join(links))
+                self.assertNotIn('./AVERAGE_COSTS.json', doc.footer_links)
+                self.assertNotIn('methodology above', page)
+                self.assertIn('Exploratory results from synthetic cases', page.split('<figure', 1)[0])
+                for packet in packets:
+                    self.assertIn('./' + build.FIVE_FILES[packet['model']], links)
+                    for revision in [packet['source_revision']] + packet.get('additional_source_revisions', []):
+                        self.assertIn(build.UPSTREAM + '/tree/' + revision, links)
+                    self.assertIn(packet['cost_assumptions'], ''.join(doc.text))
+                    self.assertNotIn('./' + build.FIVE_FILES[packet['model']], doc.footer_links)
+                self.assertIn('Corrected technical attempts replace only', ''.join(doc.text))
+                self.assertIn('Fable 5.2', ''.join(doc.text))
 
     def test_decoder_and_rejections(self):
         for model in build.FIVE_FILES:

@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 from tools import build
+from test_averages import historical_ui_bytes
 from test_november import fixture as november_fixture, encode
 
 
@@ -144,7 +145,7 @@ class ApprovedCarbonTests(unittest.TestCase):
             if name in ('site/MODEL_AVERAGES.json', 'site/index.html'):
                 continue  # Derived assets must change for the enabled 30-model intake.
             raw = (build.ROOT/name).read_bytes()
-            self.assertEqual(sha256(raw).hexdigest(), digest, name)
+            self.assertEqual(sha256(historical_ui_bytes(name, raw)).hexdigest(), digest, name)
             if name.startswith('site/'):
                 self.assertEqual(files[name[5:]], raw, name)
         raw = (build.ROOT/'source/CARBON_20261111.json').read_bytes()
@@ -185,7 +186,7 @@ class ApprovedCarbonTests(unittest.TestCase):
         self.assertNotRegex(chart.lower(), r'scored|assigned|coverage|badge|88/88|\d+/\d+')
         self.assertIn('30 models', html)
         self.assertIn('best-quality of two runs (one whole observation)', html)
-        self.assertIn('Percentages follow the per-model methodology above.', html)
+        self.assertIn('Percentages follow the per-model methodology in Methodology &amp; sources below.', html)
         self.assertIn('30 models · sorted by quality', html)
         self.assertIn('<span>Quality ↓</span>', html)
         self.assertIn('class="chart-stat quality-stat"', carbon)
@@ -202,4 +203,4 @@ class ApprovedCarbonTests(unittest.TestCase):
         self.assertEqual(len(json.loads(files['MODEL_AVERAGES.json'])['models']), 29)
         for name, digest in manifest.items():
             raw = files[name[5:]] if name.startswith('site/') else (build.ROOT/name).read_bytes()
-            self.assertEqual(sha256(raw).hexdigest(), digest, name)
+            self.assertEqual(sha256(historical_ui_bytes(name, raw)).hexdigest(), digest, name)

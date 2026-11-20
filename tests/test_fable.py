@@ -201,7 +201,7 @@ class FableTests(unittest.TestCase):
         self.assertEqual(rendered, html)
         self.assertNotIn('Both are average percentages across one or two observations.', rendered)
         self.assertNotIn('Both are average percentages across two observations.', rendered)
-        self.assertIn('Percentages follow the per-model methodology above.', rendered)
+        self.assertIn('Percentages follow the per-model methodology in Methodology &amp; sources below.', rendered)
         self.assertIn('Fable 5.2 uses the best-quality of two runs (one whole observation); other models retain averages,', rendered)
         self.assertNotIn('Download model averages', html)
         chart = html.split('<ol class="chart">')[1].split('</ol>')[0]

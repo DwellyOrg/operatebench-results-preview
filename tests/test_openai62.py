@@ -9,6 +9,7 @@ from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 from tools import build
+from test_averages import historical_ui_bytes
 
 # Independently derived from original table counts and approved aggregate counts;
 # no renderer/parser helpers used to calculate these exact rational goldens.
@@ -267,7 +268,7 @@ class OpenAI62Tests(unittest.TestCase):
                     files = build.outputs()
                     html = build.render()
                     self.assertEqual(html.encode(), files['index.html'])
-                    method = html.split('<p id="method">', 1)[1].split('</p>', 1)[0]
+                    method = html.split('<details class="methodology"><summary>Methodology &amp; sources</summary><p>', 1)[1].split('</p>', 1)[0]
                     note = html.split('<p id="chart-note">', 1)[1].split('</p>', 1)[0]
                     data = json.loads(files['MODEL_AVERAGES.json'])
                     self.assertIn('OpenAI 6.2 models have one observation each', method)
@@ -311,4 +312,4 @@ class OpenAI62Tests(unittest.TestCase):
                     patch.object(build, 'load_fable', return_value=fable if has_fable else None), \
                     patch.object(build, 'load_selected_six', return_value=selected if has_selected else None):
                 files = build.outputs()
-                self.assertEqual(tuple(sha256(files[n]).hexdigest() for n in ('index.html', 'MODEL_AVERAGES.json')), hashes)
+                self.assertEqual(tuple(sha256(historical_ui_bytes(n, files[n])).hexdigest() for n in ('index.html', 'MODEL_AVERAGES.json')), hashes)

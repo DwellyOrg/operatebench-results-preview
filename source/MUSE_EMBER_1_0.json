@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "model": "muse-ember-1.0",
+  "provider": "meta",
+  "endpoint": "Responses",
+  "reasoning": "minimal",
+  "currency": "USD",
+  "pricing_basis": "official_current_tariff_estimate",
+  "case_set": "same-44-cases",
+  "source_revision": "1fdb4a470231088cb05adf3daa4fb867e228d02a",
+  "additional_source_revisions": [
+    "9e7464c1924432787c8ba8582cde42aa5d058d20"
+  ],
+  "date": "2026-11-20",
+  "cost_assumptions": "One observation on the same 44 cases. Minimal reasoning requested on the native Meta Responses API. Conditional pre-tax estimate from reported input, cached input and output tokens at published Standard tariffs. The default service tier echo does not independently attest account billing mode. All 45 attempts included, including 52 responses from the retained unscored technical attempt. Reasoning is counted once within output. Additional fees and invoice totals are unknown. Technical correction used a linked later source revision with unchanged Core, instructions, evaluator and cases.",
+  "observations": [
+    {
+      "id": "observation-1",
+      "assigned": 44,
+      "scored": 44,
+      "excluded": 0,
+      "aborted": 0,
+      "goal_completed": 22,
+      "reliable": 9,
+      "estimated_cost_low_usd": "1.329589588",
+      "estimated_cost_high_usd": "1.329589588",
+      "incomplete_usage": false
+    }
+  ]
+}

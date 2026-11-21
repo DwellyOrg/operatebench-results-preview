@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "model": "ricursiveAI/Ripple-65B-Preview-NVFP4",
+  "provider": "river",
+  "endpoint": "grpc_inference_generate",
+  "reasoning": "provider-default",
+  "currency": "USD",
+  "pricing_basis": "official_current_tariff_estimate",
+  "case_set": "same-44-cases",
+  "source_revision": "5964fccc610c807c94809eb5c05ac02bc449b6c6",
+  "additional_source_revisions": [
+    "1fdb4a470231088cb05adf3daa4fb867e228d02a"
+  ],
+  "date": "2026-11-21",
+  "cost_assumptions": "One observation on the same 44 cases using native River generation and provider-default reasoning. Conditional conservative token estimate uses the published native sampling tariff captured on 19 November 2026: 1 USD per million input tokens and 3 USD per million output tokens. Cached input is not discounted because native scalar presence is indeterminate; separate reasoning usage is unavailable. Reported usage from all 51 retained attempts is included. The displayed lower bound applies to this conservative reported-usage estimate, not to actual charges or the invoice. Interrupted and excluded attempts retain unknown usage and liability; unknown reservation exposure is not added to observed cost. Full cost, fees and invoice remain unknown. Native responses do not independently attest returned model identity or reasoning mode. Every scored record was replayed with its original evaluator. Technical attempts retain both actual public source revisions. One observation is not a statistical performance estimate.",
+  "observations": [
+    {
+      "id": "observation-1",
+      "assigned": 44,
+      "scored": 44,
+      "excluded": 0,
+      "aborted": 0,
+      "goal_completed": 32,
+      "reliable": 4,
+      "estimated_cost_low_usd": "50.043499",
+      "estimated_cost_high_usd": "50.043499",
+      "incomplete_usage": true
+    }
+  ]
+}

@@ -52,25 +52,26 @@ class DetailsParser(HTMLParser):
 
 
 class FiveIntakeTests(unittest.TestCase):
-    def test_approved_four_packets(self):
+    def test_approved_five_packets(self):
         expected = {
             'gemini-4-hydrogen': (44, 10, '56.285823', '6cc8dcbac6f9cfb993c8c9b25cacaf17fc80ec852618f00e029b2c0ce4d5ee73'),
             'gemini-4-neon': (44, 39, '109.913439', 'd44eee5ef1a5b6d8aae10c3daae2c8409bfcb2c7621f816a246c9e0d25427435'),
             'muse-ember-1.0': (22, 9, '1.329589588', '1ad27648d23ca03e49e0b052b75c86f3faf78deae508cbc448fa2bffe3de45bc'),
+            'ricursiveAI/Ripple-65B-Preview-NVFP4': (32, 4, '50.043499', '80055ef647281808e7cd54f821e5144e856418593d5524e6fbfcba0c3ab66d4a'),
             'moonshotai/Kimi-K3.1-Pro': (6, 2, '203.819236', 'feda7a97b812294a2706defd40e504ba9bffdccfcb9a5d1fce01c43b65c78b6f'),
         }
         files = build.outputs()
         data = json.loads(files['MODEL_AVERAGES.json'])
-        self.assertEqual(len(data['models']), 36)
+        self.assertEqual(len(data['models']), 37)
         self.assertEqual({p['model'] for p in build.load_five()}, set(expected))
-        self.assertEqual(len(files), 21)
+        self.assertEqual(len(files), 22)
         self.assertIn('.nojekyll', files)
         for model, (goal, reliable, cost, pin) in expected.items():
             raw = (build.ROOT / 'source' / build.FIVE_FILES[model]).read_bytes()
             self.assertEqual(sha256(raw).hexdigest(), pin)
             self.assertEqual(files[build.FIVE_FILES[model]], raw)
             packet = build.parse_five(raw, pin, model)
-            self.assertEqual(packet['source_revision'], '1fdb4a470231088cb05adf3daa4fb867e228d02a')
+            self.assertEqual(packet['source_revision'], '5964fccc610c807c94809eb5c05ac02bc449b6c6' if model.startswith('ricursiveAI/') else '1fdb4a470231088cb05adf3daa4fb867e228d02a')
             obs = packet['observations'][0]
             self.assertEqual((obs['assigned'], obs['scored'], obs['goal_completed'], obs['reliable']), (44, 44, goal, reliable))
             row = next(row for row in data['models'] if row['model'] == model)
@@ -78,6 +79,7 @@ class FiveIntakeTests(unittest.TestCase):
             self.assertEqual(row['average_full_run_estimate']['mean_cost_high_usd'], cost)
             self.assertIn(model + ' observation aggregates (JSON)', files['index.html'].decode())
         page = files['index.html'].decode()
+        self.assertIn('aria-label="at least $50.04, recorded usage subtotal">≥ $50.04', page)
         self.assertIn('aria-label="at least $203.81, recorded usage subtotal">≥ $203.81', page)
         self.assertIn('≥ marks a recorded-usage subtotal; total cost is unknown.', page.split('<details', 1)[0])
         self.assertIn('served setting is not independently attested', data['cost_assumptions'])
@@ -119,8 +121,24 @@ class FiveIntakeTests(unittest.TestCase):
                     self.assertEqual(model in prefix, any(p['model'] == model for p in packets))
                 if not packets:
                     self.assertEqual(scope, '')
-                if len(packets) == 5:
+                if any(p in other for p in packets):
                     self.assertIn('&amp; test.', page)
+
+    def test_ripple_with_every_combination_of_other_four(self):
+        packets = build.load_five()
+        ripple = next(p for p in packets if p['model'].startswith('ricursiveAI/'))
+        others = [p for p in packets if p is not ripple]
+        for flags in itertools.product((False, True), repeat=4):
+            selected = [p for p, enabled in zip(others, flags) if enabled]
+            for enabled in (False, True):
+                active = selected + ([ripple] if enabled else [])
+                with self.subTest(flags=flags, ripple=enabled), patch.object(build, 'load_five', return_value=active):
+                    page = build.render()
+                    self.assertIn(f'{32 + len(active)} models · sorted by quality', page)
+                    self.assertEqual('≥ $50.04' in page, enabled)
+                    if enabled:
+                        for revision in [ripple['source_revision']] + ripple['additional_source_revisions']:
+                            self.assertIn(build.UPSTREAM + '/tree/' + revision, page)
 
     def test_collapsed_methodology_contains_full_provenance(self):
         real = build.load_five()

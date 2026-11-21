@@ -1,7 +1,6 @@
-# Five-model intake staging
+# Five-model intake
 
-Hydrogen, Neon, Ember and Kimi K3.1 Pro are active with approved packet bytes and pins. The remaining
-Ripple entry remains inactive. The five
+Hydrogen, Neon, Ember, Ripple and Kimi K3.1 Pro are active with approved packet bytes and pins. The five
 independent file and pin entries in `tools/build.py` are:
 
 | Exact model ID | File under `source/` |
@@ -44,7 +43,7 @@ its `FIVE_DIGESTS` entry to the supplied 64-character lowercase hash. Update
 the corresponding entry in the explicit mapping for individual pins.
 Each missing file with a `None` pin is omitted; a present unpinned file or a
 missing pinned file fails the build. A subset can be admitted independently;
-all five accepted alongside the original 32 would give 37; the current four give 36. The builder checks
+all five accepted alongside the original 32 give 37. The builder checks
 bytes and schema on load and again before copying packet bytes to the site.
 Do not use synthetic tests as result data. Update any census and descriptive
 materials only after actual data and publication are approved.

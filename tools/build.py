@@ -385,7 +385,7 @@ FIVE_DIGESTS = {
     'gemini-4-hydrogen': '6cc8dcbac6f9cfb993c8c9b25cacaf17fc80ec852618f00e029b2c0ce4d5ee73',
     'gemini-4-neon': 'd44eee5ef1a5b6d8aae10c3daae2c8409bfcb2c7621f816a246c9e0d25427435',
     'muse-ember-1.0': '1ad27648d23ca03e49e0b052b75c86f3faf78deae508cbc448fa2bffe3de45bc',
-    'ricursiveAI/Ripple-65B-Preview-NVFP4': None,
+    'ricursiveAI/Ripple-65B-Preview-NVFP4': '80055ef647281808e7cd54f821e5144e856418593d5524e6fbfcba0c3ab66d4a',
     'moonshotai/Kimi-K3.1-Pro': 'feda7a97b812294a2706defd40e504ba9bffdccfcb9a5d1fce01c43b65c78b6f',
 }
 

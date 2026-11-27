@@ -54,3 +54,9 @@ For a local check, from the site root, use the project's existing Python with
 `python tools/build.py --check`. Review the exact generated files, accessible
 per-model packet links, provenance, cost assumptions and historical row parity.
 Parent owns any further publication, CI, merge and live verification.
+
+## Nemotron addition
+
+The separate Nemotron packet uses `source_variant: provider-adapter-overlay-on-public-base`. Its `source_revision` identifies the public base, not the exact executing adapter tree. Route is River Chat Completions with reasoning requested off. The same coverage and pinned-byte checks apply.
+
+The [Nemotron packet](source/NVIDIA_NEMOTRON_3_5_SUPER_VL_120B_A12B_NVFP4.json) records 44/44 scored cases, strict quality 0/44 and goal achievement 5/44. The estimate is USD 1.26171867 (complete recorded token usage), not an invoice. This run used a separate HTTP provider adapter overlay on the linked public base; the link is not the exact executing tree.

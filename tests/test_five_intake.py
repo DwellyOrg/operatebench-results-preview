@@ -16,6 +16,14 @@ from tools import build
 from test_openai62 import fixture, encode
 
 
+def intake_fixture(model):
+    value = fixture(model)
+    if model == build.NEMOTRON_MODEL:
+        value.update(provider='river', endpoint='chat-completions', reasoning='none-requested',
+                     source_variant=build.NEMOTRON_VARIANT)
+    return value
+
+
 class DetailsParser(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -62,9 +70,10 @@ class FiveIntakeTests(unittest.TestCase):
         }
         files = build.outputs()
         data = json.loads(files['MODEL_AVERAGES.json'])
-        self.assertEqual(len(data['models']), 37)
-        self.assertEqual({p['model'] for p in build.load_five()}, set(expected))
-        self.assertEqual(len(files), 22)
+        overlay = build.FIVE_DIGESTS[build.NEMOTRON_MODEL] is not None
+        self.assertEqual(len(data['models']), 37 + int(overlay))
+        self.assertEqual({p['model'] for p in build.load_five()} - {build.NEMOTRON_MODEL}, set(expected))
+        self.assertEqual(len(files), 22 + int(overlay))
         self.assertIn('.nojekyll', files)
         for model, (goal, reliable, cost, pin) in expected.items():
             raw = (build.ROOT / 'source' / build.FIVE_FILES[model]).read_bytes()
@@ -95,7 +104,7 @@ class FiveIntakeTests(unittest.TestCase):
 
     def test_counts_and_cost_scope_for_optional_models(self):
         real = build.load_five()
-        other = [fixture(model) for model in build.FIVE_FILES if model not in {p['model'] for p in real}]
+        other = [intake_fixture(model) for model in build.FIVE_FILES if model not in {p['model'] for p in real}]
         for packet in other:
             packet['cost_assumptions'] = 'Synthetic scope for ' + packet['model'] + ' & test.'
         scenarios = ([], real[:1], real[1:2], real[2:3], real[:2], real, real + other, other[:1])
@@ -127,8 +136,8 @@ class FiveIntakeTests(unittest.TestCase):
     def test_ripple_with_every_combination_of_other_four(self):
         packets = build.load_five()
         ripple = next(p for p in packets if p['model'].startswith('ricursiveAI/'))
-        others = [p for p in packets if p is not ripple]
-        for flags in itertools.product((False, True), repeat=4):
+        others = [p for p in packets if p is not ripple and p['model'] != build.NEMOTRON_MODEL]
+        for flags in itertools.product((False, True), repeat=len(others)):
             selected = [p for p, enabled in zip(others, flags) if enabled]
             for enabled in (False, True):
                 active = selected + ([ripple] if enabled else [])
@@ -142,7 +151,7 @@ class FiveIntakeTests(unittest.TestCase):
 
     def test_collapsed_methodology_contains_full_provenance(self):
         real = build.load_five()
-        synthetic = [fixture(model) for model in build.FIVE_FILES if model not in {p['model'] for p in real}]
+        synthetic = [intake_fixture(model) for model in build.FIVE_FILES if model not in {p['model'] for p in real}]
         for packets in ([], real[:1], real + synthetic):
             with self.subTest(models=[p['model'] for p in packets]), patch.object(build, 'load_five', return_value=packets):
                 page = build.render()
@@ -207,8 +216,9 @@ class FiveIntakeTests(unittest.TestCase):
 
     def test_decoder_and_rejections(self):
         for model in build.FIVE_FILES:
-            packet = fixture(model)
-            packet.update(provider='provider', endpoint='endpoint', reasoning='setting')
+            packet = intake_fixture(model)
+            if model != build.NEMOTRON_MODEL:
+                packet.update(provider='provider', endpoint='endpoint', reasoning='setting')
             raw, pin = encode(packet)
             self.assertEqual(build.parse_five(raw, pin, model), packet)
             for change in ('extra', 'route', 'coverage', 'cost', 'revision'):
@@ -294,7 +304,7 @@ class FiveIntakeTests(unittest.TestCase):
             with patch.object(build, 'ROOT', root), patch.object(build, 'FIVE_DIGESTS', pins):
                 self.assertEqual(build.outputs(), baseline)
                 for model, filename in build.FIVE_FILES.items():
-                    raw, pin = encode(fixture(model))
+                    raw, pin = encode(intake_fixture(model))
                     path = root / 'source' / filename
                     path.write_bytes(raw)
                     with self.assertRaises(ValueError): build.load_five()
@@ -302,7 +312,7 @@ class FiveIntakeTests(unittest.TestCase):
                 active = build.outputs()
                 data = json.loads(active['MODEL_AVERAGES.json'])
                 rows = {r['model']: r for r in data['models']}
-                self.assertEqual(len(rows), 37)
+                self.assertEqual(len(rows), 38)
                 self.assertEqual({m: rows[m] for m in baseline_rows}, baseline_rows)
                 html = active['index.html'].decode()
                 for model, filename in build.FIVE_FILES.items():

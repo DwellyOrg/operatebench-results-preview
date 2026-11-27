@@ -374,12 +374,15 @@ def load_openai62():
 
 
 # Approved packets require individual byte pins; other models remain inactive.
+NEMOTRON_MODEL = 'nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4'
+NEMOTRON_VARIANT = 'provider-adapter-overlay-on-public-base'
 FIVE_FILES = {
     'gemini-4-hydrogen': 'GEMINI_4_HYDROGEN.json',
     'gemini-4-neon': 'GEMINI_4_NEON.json',
     'muse-ember-1.0': 'MUSE_EMBER_1_0.json',
     'ricursiveAI/Ripple-65B-Preview-NVFP4': 'RICURSIVEAI_RIPPLE_65B_PREVIEW_NVFP4.json',
     'moonshotai/Kimi-K3.1-Pro': 'MOONSHOTAI_KIMI_K3_1_PRO.json',
+    NEMOTRON_MODEL: 'NVIDIA_NEMOTRON_3_5_SUPER_VL_120B_A12B_NVFP4.json',
 }
 FIVE_DIGESTS = {
     'gemini-4-hydrogen': '6cc8dcbac6f9cfb993c8c9b25cacaf17fc80ec852618f00e029b2c0ce4d5ee73',
@@ -387,6 +390,7 @@ FIVE_DIGESTS = {
     'muse-ember-1.0': '1ad27648d23ca03e49e0b052b75c86f3faf78deae508cbc448fa2bffe3de45bc',
     'ricursiveAI/Ripple-65B-Preview-NVFP4': '80055ef647281808e7cd54f821e5144e856418593d5524e6fbfcba0c3ab66d4a',
     'moonshotai/Kimi-K3.1-Pro': 'feda7a97b812294a2706defd40e504ba9bffdccfcb9a5d1fce01c43b65c78b6f',
+    NEMOTRON_MODEL: 'd664f20331b261271a635d84925570eb03c60ed6ba0deefe635ad8004292644f',
 }
 
 
@@ -399,9 +403,14 @@ def parse_five(data, digest, model):
             not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}', value[k])
             for k in ('provider', 'endpoint', 'reasoning')):
         raise ValueError('Invalid intake route metadata')
+    is_overlay = model == NEMOTRON_MODEL
+    if is_overlay and (value['provider'], value['endpoint'], value['reasoning']) != (
+            'river', 'chat-completions', 'none-requested'):
+        raise ValueError('Unexpected Nemotron route metadata')
     return _parse_observations(data, digest, model, value['reasoning'], label='Intake',
         ids={'observation-1'}, provider=value['provider'], endpoint=value['endpoint'],
-        observation_count=1, cost_assumptions=True, additional_sources=True)
+        observation_count=1, cost_assumptions=True, additional_sources=not is_overlay,
+        source_variant=NEMOTRON_VARIANT if is_overlay else None)
 
 
 def load_five():
@@ -443,7 +452,7 @@ def parse_fable(data, digest):
 
 def _parse_observations(data, digest, model, reasoning, label='November', fixed_date=None, ids=None,
                         provider='anthropic', endpoint='messages', observation_count=2, cost_assumptions=False,
-                        additional_sources=False):
+                        additional_sources=False, source_variant=None):
     if type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest):
         raise ValueError(f'{label} requires an approved byte pin')
     raw = data.encode() if isinstance(data, str) else data
@@ -453,6 +462,8 @@ def _parse_observations(data, digest, model, reasoning, label='November', fixed_
     literals = dict(schema_version=1, model=model, provider=provider,
         endpoint=endpoint, reasoning=reasoning, currency='USD',
         pricing_basis='official_current_tariff_estimate', case_set='same-44-cases')
+    if source_variant is not None:
+        literals['source_variant'] = source_variant
     if (type(value) is not dict or set(value) != set(literals) | {
             'source_revision', 'date', 'observations'} | ({'cost_assumptions'} if cost_assumptions else set())
             | ({'additional_source_revisions'} if additional_sources and 'additional_source_revisions' in value else set())
@@ -860,7 +871,11 @@ def render(rows=None):
         for new in five:
             refs = ''.join(' · <a href="' + UPSTREAM + '/tree/' + revision + '">additional technical source ' + revision + ' for ' + escape(new['model']) + '</a>'
                            for revision in new.get('additional_source_revisions', []))
-            template = template.replace('<footer>', '<footer><p><a href="./' + FIVE_FILES[new['model']] + '">' + escape(new['model']) + ' observation aggregates (JSON)</a> · <a href="' + UPSTREAM + '/tree/' + new['source_revision'] + '">primary actual source revision for ' + escape(new['model']) + '</a>' + refs + '</p>')
+            source = 'primary actual source revision'
+            if new.get('source_variant') == NEMOTRON_VARIANT:
+                source = 'public base revision'
+                refs += ' · evaluated with a separate provider adapter overlay'
+            template = template.replace('<footer>', '<footer><p><a href="./' + FIVE_FILES[new['model']] + '">' + escape(new['model']) + ' observation aggregates (JSON)</a> · <a href="' + UPSTREAM + '/tree/' + new['source_revision'] + '">' + source + ' for ' + escape(new['model']) + '</a>' + refs + '</p>')
     chart = render_chart(rows, costs, packet, fable, five)
     if openai62:
         for text in ('Percentages follow the per-model methodology in Methodology &amp; sources below.',

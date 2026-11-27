@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "model": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+  "provider": "river",
+  "endpoint": "chat-completions",
+  "reasoning": "none-requested",
+  "currency": "USD",
+  "pricing_basis": "official_current_tariff_estimate",
+  "case_set": "same-44-cases",
+  "source_revision": "6c8efddd7145b3b07e66634ab0bd8527a0a0072d",
+  "source_variant": "provider-adapter-overlay-on-public-base",
+  "date": "2026-11-27",
+  "cost_assumptions": "Pre-tax reported-usage estimate at River published inference rates: USD 0.07 ordinary input, USD 0.024 cached input and USD 0.37 output per million tokens. All original cases and their recorded requests are included. Additional fees and the invoice are unknown. Reasoning was requested off; the served setting was not independently attested.",
+  "observations": [
+    {
+      "id": "observation-1",
+      "assigned": 44,
+      "scored": 44,
+      "excluded": 0,
+      "aborted": 0,
+      "goal_completed": 5,
+      "reliable": 0,
+      "estimated_cost_low_usd": "1.26171867",
+      "estimated_cost_high_usd": "1.26171867",
+      "incomplete_usage": false
+    }
+  ]
+}
